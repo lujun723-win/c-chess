@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中国象棋学习网站 - 原型草图</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">象棋学习</div>
+        <nav class="menu">
+          <a class="active" href="#dashboard">首页</a>
+          <a href="#games">棋局中心</a>
+          <a href="#review">复盘</a>
+          <a href="#training">训练</a>
+          <a href="#rank">等级体系</a>
+          <a href="#progress">成长看板</a>
+          <a href="#family">家庭组</a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-wrap">
+            <h1>中国象棋学习网站（原型）</h1>
+            <p>目标：减少失误，建立“复盘-训练-进步”闭环</p>
+          </div>
+          <div class="role-switch">
+            <button class="chip active">家长视角</button>
+            <button class="chip">孩子视角</button>
+          </div>
+        </header>
+
+        <section id="dashboard" class="panel">
+          <h2>首页总览</h2>
+          <div class="grid four">
+            <article class="card kpi accent-soft">
+              <h3>今日完成</h3>
+              <p class="big">2 / 4</p>
+              <p>训练 2 次，复盘 0 次</p>
+            </article>
+            <article class="card kpi accent-soft">
+              <h3>当前段位</h3>
+              <p class="big">业余 3 段</p>
+              <p>距离 4 段还差 18 分</p>
+            </article>
+            <article class="card kpi">
+              <h3>本周失误率</h3>
+              <p class="big">21%</p>
+              <p>较上周下降 4%</p>
+            </article>
+            <article class="card kpi">
+              <h3>训练连续天数</h3>
+              <p class="big">6 天</p>
+              <p>再坚持 1 天解锁周目标</p>
+            </article>
+          </div>
+
+          <div class="grid two">
+            <article class="card action-card">
+              <h3>风险热点（摘要）</h3>
+              <ul>
+                <li>漏看将军（高）</li>
+                <li>贪子失先（中）</li>
+                <li>边路空虚（中）</li>
+              </ul>
+              <button>进入复盘页处理</button>
+            </article>
+            <article class="card action-card">
+              <h3>今日待办（摘要）</h3>
+              <ol>
+                <li>完成残局训练 2 题</li>
+                <li>复盘昨晚对局 #12</li>
+                <li>查看孩子本周进度</li>
+              </ol>
+              <button class="primary">开始今日任务</button>
+            </article>
+          </div>
+
+          <div class="grid three">
+            <article class="card">
+              <h3>棋局中心摘要</h3>
+              <p>待复盘 3 局，进行中 1 局</p>
+              <button>进入棋局中心</button>
+            </article>
+            <article class="card">
+              <h3>训练摘要</h3>
+              <p>今日推荐 3 题，预计 18 分钟</p>
+              <button>进入训练页</button>
+            </article>
+            <article class="card">
+              <h3>家庭组摘要</h3>
+              <p>孩子完成率 67%，本周上升 9%</p>
+              <button>查看家庭看板</button>
+            </article>
+          </div>
+        </section>
+
+        <section id="games" class="panel">
+          <h2>棋局中心（页面概要）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>页面目标</h3>
+              <p>完成棋局录入、回放与关键步标记，沉淀复盘材料。</p>
+            </article>
+            <article class="card">
+              <h3>关键功能</h3>
+              <ul>
+                <li>棋盘录入与悔棋</li>
+                <li>疑问步标记</li>
+                <li>棋局保存与回放</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="review" class="panel">
+          <h2>复盘页面（页面概要）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>页面目标</h3>
+              <p>把一盘棋的关键失误拆成可执行改进点，直接引导训练。</p>
+            </article>
+            <article class="card">
+              <h3>关键功能</h3>
+              <ul>
+                <li>关键失误识别与分级</li>
+                <li>候选走法与原因解释</li>
+                <li>一键生成对应训练任务</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="training" class="panel">
+          <h2>训练页面（页面概要）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>页面目标</h3>
+              <p>根据个人漏洞画像生成短时、高频、可坚持的训练任务。</p>
+            </article>
+            <article class="card">
+              <h3>关键功能</h3>
+              <ul>
+                <li>每日训练清单</li>
+                <li>按漏洞类型推荐题目</li>
+                <li>训练结果反馈与记录</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="rank" class="panel">
+          <h2>成长评估体系（段位）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>段位路径</h3>
+              <ul>
+                <li>入门 -> 业余 1 段 -> 业余 2 段 -> 业余 3 段</li>
+                <li>业余 4 段 -> 业余 5 段 -> 业余 6 段</li>
+                <li>每段对应能力门槛与训练要求</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>评分维度</h3>
+              <ul>
+                <li>攻击效率</li>
+                <li>计算精度</li>
+                <li>子力运用</li>
+                <li>防守韧性</li>
+                <li>对抗强度</li>
+                <li>成长执行（含积分累计）</li>
+              </ul>
+            </article>
+          </div>
+          <div class="grid two">
+            <article class="card">
+              <h3>六维雷达（示意）</h3>
+              <div class="radar-wrap">
+                <svg viewBox="0 0 320 280" class="radar" aria-label="六维雷达图">
+                  <polygon points="160,35 255,88 255,192 160,245 65,192 65,88" class="radar-grid"></polygon>
+                  <polygon points="160,58 236,100 236,180 160,222 84,180 84,100" class="radar-grid"></polygon>
+                  <polygon points="160,82 217,112 217,168 160,198 103,168 103,112" class="radar-grid"></polygon>
+                  <polygon points="160,106 198,124 198,156 160,174 122,156 122,124" class="radar-grid"></polygon>
+                  <polygon points="160,130 179,136 179,144 160,150 141,144 141,136" class="radar-grid"></polygon>
+
+                  <line x1="160" y1="140" x2="160" y2="35" class="radar-axis"></line>
+                  <line x1="160" y1="140" x2="255" y2="88" class="radar-axis"></line>
+                  <line x1="160" y1="140" x2="255" y2="192" class="radar-axis"></line>
+                  <line x1="160" y1="140" x2="160" y2="245" class="radar-axis"></line>
+                  <line x1="160" y1="140" x2="65" y2="192" class="radar-axis"></line>
+                  <line x1="160" y1="140" x2="65" y2="88" class="radar-axis"></line>
+
+                  <polygon points="160,78 224,106 212,170 160,198 117,164 98,109" class="radar-shape"></polygon>
+
+                  <text x="160" y="24" text-anchor="middle">攻击</text>
+                  <text x="272" y="84" text-anchor="start">计算</text>
+                  <text x="272" y="202" text-anchor="start">子力</text>
+                  <text x="160" y="265" text-anchor="middle">防守</text>
+                  <text x="48" y="202" text-anchor="end">对抗</text>
+                  <text x="48" y="84" text-anchor="end">成长</text>
+                </svg>
+              </div>
+            </article>
+            <article class="card">
+              <h3>当前能力值（示意）</h3>
+              <ul>
+                <li>攻击：62</li>
+                <li>计算：68</li>
+                <li>子力：55</li>
+                <li>防守：58</li>
+                <li>对抗：52</li>
+                <li>成长：73</li>
+              </ul>
+            </article>
+          </div>
+          <div class="grid three">
+            <article class="card">
+              <h3>当前等级</h3>
+              <p class="big">业余 3 段</p>
+            </article>
+            <article class="card">
+              <h3>升级条件完成度</h3>
+              <p class="big">72%</p>
+            </article>
+            <article class="card">
+              <h3>下一步建议</h3>
+              <p>优先提升“防将杀”和“残局稳定度”。</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="progress" class="panel">
+          <h2>成长看板（页面概要）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>页面目标</h3>
+              <p>验证进步是否真实发生，并定位反复波动的阶段。</p>
+            </article>
+            <article class="card">
+              <h3>关键功能</h3>
+              <ul>
+                <li>7 天/30 天趋势对比</li>
+                <li>异常点跳转到具体复盘</li>
+                <li>家长查看孩子趋势（只读）</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="family" class="panel">
+          <h2>家庭组（页面概要）</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>页面目标</h3>
+              <p>支持家庭协同学习，同时保证账号数据边界。</p>
+            </article>
+            <article class="card">
+              <h3>关键功能</h3>
+              <ul>
+                <li>家庭组创建与邀请</li>
+                <li>成员角色管理（parent/child）</li>
+                <li>权限说明与只读模式提示</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <a class="active" href="#dashboard">首页</a>
+      <a href="#games">棋局</a>
+      <a href="#training">训练</a>
+      <a href="#rank">段位</a>
+      <a href="#family">家庭</a>
+    </nav>
+  </body>
+</html>
