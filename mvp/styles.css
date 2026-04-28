@@ -386,6 +386,38 @@ hr {
   animation: check-callout 2s ease-out forwards;
 }
 
+.thinking-bubble {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  margin-top: -34px;
+  padding: 5px 10px;
+  border: 1px solid #b9c8f0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #355ab8;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+  z-index: 16;
+  box-shadow: 0 5px 12px rgba(55, 89, 172, 0.22);
+  animation: thinking-bob 1.2s ease-in-out infinite;
+}
+
+.thinking-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(255, 255, 255, 0.96);
+  border-right: 1px solid #b9c8f0;
+  border-bottom: 1px solid #b9c8f0;
+}
+
 @keyframes pick-up-bob {
   0%,
   100% {
@@ -466,6 +498,16 @@ hr {
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1) translateY(2px);
+  }
+}
+
+@keyframes thinking-bob {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-2px);
   }
 }
 

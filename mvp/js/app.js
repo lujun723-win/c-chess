@@ -85,6 +85,7 @@ const battleLastPlyBtn = document.getElementById("battle-last-ply-btn");
 const gameState = {
   gameId: null,
   ply: 0,
+  followLatest: true,
   selected: null, // [row,col]
 };
 
@@ -128,6 +129,15 @@ function createFxNode(className, row, col, text = "") {
   node.style.top = pointTopPercent(row);
   if (text) node.textContent = text;
   return node;
+}
+
+function findPiecePoint(board, pieceCode) {
+  for (let row = 0; row < 10; row += 1) {
+    for (let col = 0; col < 9; col += 1) {
+      if (board[row][col] === pieceCode) return [row, col];
+    }
+  }
+  return null;
 }
 
 function ensureSfxContext() {
@@ -418,6 +428,7 @@ function renderSession() {
     logoutUser();
     gameState.gameId = null;
     gameState.ply = 0;
+    gameState.followLatest = true;
     gameState.selected = null;
     battleState.battleId = null;
     battleState.ply = 0;
@@ -495,6 +506,7 @@ function renderGameList() {
   if (games.length === 0) {
     gameSelect.innerHTML = `<option value="">暂无对局，先新建一个</option>`;
     gameState.gameId = null;
+    gameState.followLatest = true;
     return;
   }
   gameSelect.innerHTML = games
@@ -620,7 +632,8 @@ function renderBoard() {
   }
   try {
     const game = getGame(gameState.gameId);
-    const snap = getSnapshot(gameState.gameId, gameState.ply);
+    const targetPly = gameState.followLatest ? Number.MAX_SAFE_INTEGER : gameState.ply;
+    const snap = getSnapshot(gameState.gameId, targetPly);
     gameState.ply = snap.index;
     let modeLine = `模式：${gameModeText(snap.mode)}`;
     if (snap.mode === "ai") {
@@ -663,6 +676,14 @@ function renderBoard() {
         cell.textContent = code ? pieceLabel(code) : "";
         cell.addEventListener("click", () => onBoardCellClick(row, col, code, snap));
         boardEl.appendChild(cell);
+      }
+    }
+    if (snap.mode === "ai" && snap.aiThinking) {
+      const kingPoint = findPiecePoint(snap.board, `${snap.turn}K`);
+      if (kingPoint) {
+        const [kingRow, kingCol] = kingPoint;
+        const bubble = createFxNode("thinking-bubble", kingRow, kingCol, "思考中");
+        boardEl.appendChild(bubble);
       }
     }
     maybeAnimateLatestMove("game", game.id, snap, boardEl);
@@ -776,6 +797,7 @@ function onBoardCellClick(row, col, code, snap) {
   try {
     makeMove(gameState.gameId, fromRow, fromCol, row, col);
     gameState.selected = null;
+    gameState.followLatest = true;
     const last = getSnapshot(gameState.gameId, Number.MAX_SAFE_INTEGER);
     gameState.ply = last.index;
     renderGameList();
@@ -959,9 +981,13 @@ function syncAiIfNeeded() {
   if (!user) return;
   try {
     const game = getGame(gameState.gameId);
-    if (game.mode !== "ai" || game.status !== "active" || game.turn !== game.aiSide) return;
-    const res = runAiTurnIfReady(gameState.gameId);
-    if (res.moved || res.aiThinking) {
+    if (game.mode !== "ai" || game.status !== "active") return;
+    let movedOrThinking = false;
+    if (game.turn === game.aiSide) {
+      const res = runAiTurnIfReady(gameState.gameId);
+      movedOrThinking = Boolean(res.moved || res.aiThinking);
+    }
+    if (movedOrThinking || gameState.followLatest) {
       renderGameList();
       renderBoard();
     }
@@ -1173,6 +1199,7 @@ createGameBtn.addEventListener("click", () => {
     gameNameInput.value = "";
     gameState.gameId = game.id;
     gameState.ply = Number.MAX_SAFE_INTEGER;
+    gameState.followLatest = true;
     gameState.selected = null;
     renderAll();
   } catch (err) {
@@ -1187,6 +1214,7 @@ undoGameBtn.addEventListener("click", () => {
     if (snap.index < snap.max) throw new Error("请先回到最后一步再悔棋");
     undoGameMove(gameState.gameId);
     gameState.ply = Number.MAX_SAFE_INTEGER;
+    gameState.followLatest = true;
     gameState.selected = null;
     renderGameList();
     renderBoard();
@@ -1206,6 +1234,7 @@ endGameBtn.addEventListener("click", () => {
     endGame(gameState.gameId, { keepRecord });
     gameState.gameId = null;
     gameState.ply = 0;
+    gameState.followLatest = true;
     gameState.selected = null;
     renderAll();
     alert(keepRecord ? "已结束并保存棋谱。可在列表回放。" : "已结束且未保存，棋谱与复盘数据已删除。");
@@ -1217,6 +1246,7 @@ endGameBtn.addEventListener("click", () => {
 gameSelect.addEventListener("change", () => {
   gameState.gameId = gameSelect.value || null;
   gameState.ply = Number.MAX_SAFE_INTEGER;
+  gameState.followLatest = true;
   gameState.selected = null;
   renderBoard();
 });
@@ -1227,24 +1257,28 @@ gameModeSelect.addEventListener("change", () => {
 
 firstPlyBtn.addEventListener("click", () => {
   gameState.ply = 0;
+  gameState.followLatest = false;
   gameState.selected = null;
   renderBoard();
 });
 
 prevPlyBtn.addEventListener("click", () => {
   gameState.ply = Math.max(0, gameState.ply - 1);
+  gameState.followLatest = false;
   gameState.selected = null;
   renderBoard();
 });
 
 nextPlyBtn.addEventListener("click", () => {
   gameState.ply += 1;
+  gameState.followLatest = false;
   gameState.selected = null;
   renderBoard();
 });
 
 lastPlyBtn.addEventListener("click", () => {
   gameState.ply = Number.MAX_SAFE_INTEGER;
+  gameState.followLatest = true;
   gameState.selected = null;
   renderBoard();
 });
