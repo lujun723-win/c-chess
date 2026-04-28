@@ -1192,6 +1192,25 @@ export function makeMove(gameId, fromRow, fromCol, toRow, toCol) {
   return game;
 }
 
+export function endGame(gameId, { keepRecord = true } = {}) {
+  const { db, userId } = requireCurrentUser();
+  const gameIndex = db.games.findIndex((g) => g.id === gameId && g.userId === userId);
+  if (gameIndex < 0) throw new Error("对局不存在或无权限");
+  const game = db.games[gameIndex];
+  if (keepRecord) {
+    game.status = "finished";
+    if (game.winnerSide !== "r" && game.winnerSide !== "b") {
+      game.winnerSide = null;
+    }
+    game.updatedAt = new Date().toISOString();
+  } else {
+    db.games.splice(gameIndex, 1);
+    db.reviews = (db.reviews || []).filter((x) => x.gameId !== gameId);
+  }
+  saveDb(db);
+  return { keepRecord };
+}
+
 function makeBattleCode(db) {
   let code = "";
   do {
@@ -1343,4 +1362,23 @@ export function makeBattleMove(battleId, fromRow, fromCol, toRow, toCol) {
   battle.updatedAt = new Date().toISOString();
   saveDb(db);
   return battle;
+}
+
+export function endBattle(battleId, { keepRecord = true } = {}) {
+  const { db, userId } = requireCurrentUser();
+  const battleIndex = db.battles.findIndex((b) => b.id === battleId);
+  if (battleIndex < 0) throw new Error("对战不存在");
+  const battle = db.battles[battleIndex];
+  const side = userBattleSide(battle, userId);
+  if (!side) throw new Error("无权限操作该对战");
+
+  if (keepRecord) {
+    battle.status = "finished";
+    battle.winnerSide = battle.redUserId && battle.blackUserId ? oppositeSide(side) : null;
+    battle.updatedAt = new Date().toISOString();
+  } else {
+    db.battles.splice(battleIndex, 1);
+  }
+  saveDb(db);
+  return { keepRecord };
 }

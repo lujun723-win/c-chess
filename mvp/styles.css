@@ -89,6 +89,16 @@ button:hover {
   border-color: var(--brand);
 }
 
+.danger-button {
+  border-color: #e0b4b4;
+  color: #b42318;
+  background: #fff8f8;
+}
+
+.danger-button:hover {
+  border-color: #c13a2f;
+}
+
 hr {
   border: 0;
   border-top: 1px solid var(--line);

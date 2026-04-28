@@ -15,6 +15,7 @@ import {
   getMyGames,
   getSnapshot,
   makeMove,
+  endGame,
   pieceLabel,
   getGame,
   toChineseNotation,
@@ -25,6 +26,7 @@ import {
   getMyBattles,
   getBattleSnapshot,
   makeBattleMove,
+  endBattle,
   getBattle,
   getBattleRole,
   getAiLevels,
@@ -44,6 +46,7 @@ const gameModeSelect = document.getElementById("game-mode");
 const aiSideSelect = document.getElementById("ai-side");
 const aiLevelSelect = document.getElementById("ai-level");
 const createGameBtn = document.getElementById("create-game-btn");
+const endGameBtn = document.getElementById("end-game-btn");
 const gameSelect = document.getElementById("game-select");
 const boardStatus = document.getElementById("board-status");
 const boardEl = document.getElementById("xiangqi-board");
@@ -60,6 +63,7 @@ const nextPlyBtn = document.getElementById("next-ply-btn");
 const lastPlyBtn = document.getElementById("last-ply-btn");
 const battleNameInput = document.getElementById("battle-name");
 const createBattleBtn = document.getElementById("create-battle-btn");
+const endBattleBtn = document.getElementById("end-battle-btn");
 const joinBattleCodeInput = document.getElementById("join-battle-code");
 const joinBattleBtn = document.getElementById("join-battle-btn");
 const battleSelect = document.getElementById("battle-select");
@@ -308,7 +312,10 @@ function renderBoard() {
         game.aiLevel || "normal"
       }）`;
     }
-    const endLine = snap.status === "finished" ? `\n结果：${sideText(snap.winnerSide)}胜` : "";
+    const endLine =
+      snap.status === "finished"
+        ? `\n结果：${snap.winnerSide ? `${sideText(snap.winnerSide)}胜` : "手动结束"}`
+        : "";
     const assessLine = snap.latestAssessment
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
@@ -361,7 +368,10 @@ function renderBattleBoard() {
     battleState.ply = snap.index;
 
     const myTurnText = snap.turn === role ? "（轮到你）" : "（等待对手）";
-    const winnerText = snap.status === "finished" ? `\n胜方：${sideText(snap.winnerSide)}` : "";
+    const winnerText =
+      snap.status === "finished"
+        ? `\n结果：${snap.winnerSide ? `${sideText(snap.winnerSide)}胜` : "手动结束"}`
+        : "";
     const assessText = snap.latestAssessment
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
@@ -802,6 +812,25 @@ createGameBtn.addEventListener("click", () => {
   }
 });
 
+endGameBtn.addEventListener("click", () => {
+  try {
+    if (!gameState.gameId) throw new Error("请先选择一个对局");
+    const yes = confirm("确认结束当前对局？");
+    if (!yes) return;
+    const keepRecord = confirm(
+      "是否保存棋谱与复盘数据？\n点击“确定”：保存并结束。\n点击“取消”：不保存，删除该对局及其复盘数据。",
+    );
+    endGame(gameState.gameId, { keepRecord });
+    gameState.gameId = null;
+    gameState.ply = 0;
+    gameState.selected = null;
+    renderAll();
+    alert(keepRecord ? "已结束并保存棋谱。可在列表回放。" : "已结束且未保存，棋谱与复盘数据已删除。");
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 gameSelect.addEventListener("change", () => {
   gameState.gameId = gameSelect.value || null;
   gameState.ply = Number.MAX_SAFE_INTEGER;
@@ -863,6 +892,26 @@ createBattleBtn.addEventListener("click", () => {
     battleState.selected = null;
     battleState.followLatest = true;
     renderAll();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+endBattleBtn.addEventListener("click", () => {
+  try {
+    if (!battleState.battleId) throw new Error("请先选择一个对战");
+    const yes = confirm("确认结束当前对战？");
+    if (!yes) return;
+    const keepRecord = confirm(
+      "是否保存该对战棋谱？\n点击“确定”：保存并结束。\n点击“取消”：不保存，删除该对战及其分析数据。",
+    );
+    endBattle(battleState.battleId, { keepRecord });
+    battleState.battleId = null;
+    battleState.ply = 0;
+    battleState.selected = null;
+    battleState.followLatest = true;
+    renderAll();
+    alert(keepRecord ? "已结束并保存对战棋谱。" : "已结束且未保存，对战数据已删除。");
   } catch (err) {
     alert(err.message);
   }
