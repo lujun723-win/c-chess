@@ -1152,6 +1152,7 @@ export function getSnapshot(gameId, plyIndex) {
     aiLevel: game.aiLevel || null,
     status: game.status || "active",
     winnerSide: game.winnerSide || null,
+    latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
 }
@@ -1295,6 +1296,7 @@ export function getBattleSnapshot(battleId, plyIndex) {
     turn: index === max ? battle.turn : index % 2 === 0 ? "r" : "b",
     status: battle.status,
     winnerSide: battle.winnerSide,
+    latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
 }

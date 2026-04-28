@@ -216,12 +216,28 @@ function gameStatusText(status) {
   return "进行中";
 }
 
-function formatAssessment(assessment) {
+function describeScoreGap(gap) {
+  const value = Number(gap || 0);
+  if (value <= 0.35) return `几乎等同于最优着（差值 ${value.toFixed(2)}，约 0~0.5 个兵）。`;
+  if (value <= 1.5) return `轻微偏差（差值 ${value.toFixed(2)}，约 1~2 个兵），通常是先手效率稍弱。`;
+  if (value <= 3.6) return `中等偏差（差值 ${value.toFixed(2)}，约 2~4 个兵），常见于节奏慢一拍或漏掉更强先手。`;
+  return `偏差较大（差值 ${value.toFixed(2)}，超过 4 个兵），通常会形成实质劣势。`;
+}
+
+function formatAssessment(assessment, latestMoveNotation = "") {
   if (!assessment) return "";
   const riskText = assessment.risks?.length ? assessment.risks.join("、") : "暂无";
-  return `质量：${assessment.qualityLabel}（差值 ${assessment.scoreGap}）\n风险：${riskText}\n参考最优：${
-    assessment.bestMoveNotation || "无"
-  }`;
+  const moveText = latestMoveNotation || "无";
+  const bestText = assessment.bestMoveNotation || "无";
+  const compareText =
+    latestMoveNotation && assessment.bestMoveNotation
+      ? latestMoveNotation === assessment.bestMoveNotation
+        ? "对比：你这步就是参考最优。"
+        : `对比：你走了「${latestMoveNotation}」，参考最优是「${assessment.bestMoveNotation}」。`
+      : "对比：当前缺少可比对的完整信息。";
+  return `最近一步：${moveText}\n质量：${assessment.qualityLabel}\n差值解读：${describeScoreGap(
+    assessment.scoreGap,
+  )}\n风险：${riskText}\n参考最优：${bestText}\n${compareText}`;
 }
 
 function formatAssessmentInline(assessment) {
@@ -282,7 +298,9 @@ function renderBoard() {
       }）`;
     }
     const endLine = snap.status === "finished" ? `\n结果：${sideText(snap.winnerSide)}胜` : "";
-    const assessLine = snap.latestAssessment ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment)}` : "";
+    const assessLine = snap.latestAssessment
+      ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
+      : "";
     boardStatus.textContent = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
     }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${assessLine}`;
@@ -332,7 +350,9 @@ function renderBattleBoard() {
 
     const myTurnText = snap.turn === role ? "（轮到你）" : "（等待对手）";
     const winnerText = snap.status === "finished" ? `\n胜方：${sideText(snap.winnerSide)}` : "";
-    const assessText = snap.latestAssessment ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment)}` : "";
+    const assessText = snap.latestAssessment
+      ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
+      : "";
     battleStatus.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
       role,
     )}\n状态：${battleStatusText(snap.status)}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
