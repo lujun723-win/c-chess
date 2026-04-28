@@ -16,6 +16,7 @@ import {
   getSnapshot,
   makeMove,
   endGame,
+  undoGameMove,
   pieceLabel,
   getGame,
   toChineseNotation,
@@ -27,6 +28,7 @@ import {
   getBattleSnapshot,
   makeBattleMove,
   endBattle,
+  undoBattleMove,
   getBattle,
   getBattleRole,
   getAiLevels,
@@ -46,6 +48,7 @@ const gameModeSelect = document.getElementById("game-mode");
 const aiSideSelect = document.getElementById("ai-side");
 const aiLevelSelect = document.getElementById("ai-level");
 const createGameBtn = document.getElementById("create-game-btn");
+const undoGameBtn = document.getElementById("undo-game-btn");
 const endGameBtn = document.getElementById("end-game-btn");
 const gameSelect = document.getElementById("game-select");
 const boardStatus = document.getElementById("board-status");
@@ -63,6 +66,7 @@ const nextPlyBtn = document.getElementById("next-ply-btn");
 const lastPlyBtn = document.getElementById("last-ply-btn");
 const battleNameInput = document.getElementById("battle-name");
 const createBattleBtn = document.getElementById("create-battle-btn");
+const undoBattleBtn = document.getElementById("undo-battle-btn");
 const endBattleBtn = document.getElementById("end-battle-btn");
 const joinBattleCodeInput = document.getElementById("join-battle-code");
 const joinBattleBtn = document.getElementById("join-battle-btn");
@@ -310,6 +314,7 @@ function renderBoard() {
   if (!user || !gameState.gameId) {
     boardEl.innerHTML = "";
     boardStatus.textContent = "请登录并新建对局。";
+    undoGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
     return;
@@ -332,9 +337,10 @@ function renderBoard() {
     const assessLine = snap.latestAssessment
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
+    const undoLine = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
     boardStatus.textContent = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${assessLine}`;
+    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${undoLine}${assessLine}`;
     boardEl.innerHTML = "";
     for (let row = 0; row < 10; row += 1) {
       for (let col = 0; col < 9; col += 1) {
@@ -356,8 +362,10 @@ function renderBoard() {
     prevPlyBtn.disabled = snap.index === 0;
     nextPlyBtn.disabled = snap.index === snap.max;
     lastPlyBtn.disabled = snap.index === snap.max;
+    undoGameBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
   } catch (err) {
     boardStatus.textContent = err.message;
+    undoGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
   }
@@ -370,6 +378,7 @@ function renderBattleBoard() {
   if (!user || !battleState.battleId) {
     battleBoardEl.innerHTML = "";
     battleStatus.textContent = "请登录并创建/加入对战。";
+    undoBattleBtn.disabled = true;
     renderBattleMoveList();
     return;
   }
@@ -388,11 +397,12 @@ function renderBattleBoard() {
     const assessText = snap.latestAssessment
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
+    const undoText = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
     battleStatus.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
       role,
     )}\n状态：${battleStatusText(snap.status)}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${assessText}`;
+    }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${undoText}${assessText}`;
 
     battleBoardEl.innerHTML = "";
     for (let row = 0; row < 10; row += 1) {
@@ -420,9 +430,11 @@ function renderBattleBoard() {
     battlePrevPlyBtn.disabled = snap.index === 0;
     battleNextPlyBtn.disabled = snap.index === snap.max;
     battleLastPlyBtn.disabled = snap.index === snap.max;
+    undoBattleBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
   } catch (err) {
     battleStatus.textContent = err.message;
     battleBoardEl.innerHTML = "";
+    undoBattleBtn.disabled = true;
   }
   renderBattleMoveList();
 }
@@ -825,6 +837,21 @@ createGameBtn.addEventListener("click", () => {
   }
 });
 
+undoGameBtn.addEventListener("click", () => {
+  try {
+    if (!gameState.gameId) throw new Error("请先选择一个对局");
+    const snap = getSnapshot(gameState.gameId, gameState.ply);
+    if (snap.index < snap.max) throw new Error("请先回到最后一步再悔棋");
+    undoGameMove(gameState.gameId);
+    gameState.ply = Number.MAX_SAFE_INTEGER;
+    gameState.selected = null;
+    renderGameList();
+    renderBoard();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 endGameBtn.addEventListener("click", () => {
   try {
     if (!gameState.gameId) throw new Error("请先选择一个对局");
@@ -905,6 +932,22 @@ createBattleBtn.addEventListener("click", () => {
     battleState.selected = null;
     battleState.followLatest = true;
     renderAll();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+undoBattleBtn.addEventListener("click", () => {
+  try {
+    if (!battleState.battleId) throw new Error("请先选择一个对战");
+    const snap = getBattleSnapshot(battleState.battleId, battleState.ply);
+    if (snap.index < snap.max) throw new Error("请先回到最后一步再悔棋");
+    undoBattleMove(battleState.battleId);
+    battleState.ply = Number.MAX_SAFE_INTEGER;
+    battleState.selected = null;
+    battleState.followLatest = true;
+    renderBattleList();
+    renderBattleBoard();
   } catch (err) {
     alert(err.message);
   }

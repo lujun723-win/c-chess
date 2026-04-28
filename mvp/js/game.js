@@ -497,6 +497,7 @@ const AI_LEVELS = {
 const ASSESSMENT_ENGINE_VERSION = "xqwlight-v3";
 const RISK_MATERIAL_LOSS = "落点净亏风险";
 const RISK_THREE_PLY = "三步预演存在战术亏损";
+const UNDO_LIMIT_PER_USER = 3;
 
 export function getAssessmentRiskLabels() {
   return {
@@ -508,6 +509,28 @@ export function getAssessmentRiskLabels() {
 
 function oppositeSide(side) {
   return side === "r" ? "b" : "r";
+}
+
+function getUndoUsed(owner, userId) {
+  const map = owner?.undoUsedByUser || {};
+  return Number(map[userId] || 0);
+}
+
+function getUndoRemaining(owner, userId) {
+  return Math.max(0, UNDO_LIMIT_PER_USER - getUndoUsed(owner, userId));
+}
+
+function bumpUndoUsed(owner, userId) {
+  if (!owner.undoUsedByUser || typeof owner.undoUsedByUser !== "object") {
+    owner.undoUsedByUser = {};
+  }
+  owner.undoUsedByUser[userId] = getUndoUsed(owner, userId) + 1;
+}
+
+function trimOwnerMoves(owner, keepMoveCount) {
+  const keep = Math.max(0, Math.min(keepMoveCount, owner.moves.length));
+  owner.moves = owner.moves.slice(0, keep);
+  owner.snapshots = owner.snapshots.slice(0, keep + 1);
 }
 
 function getAiLevelConfig(levelId) {
@@ -1281,6 +1304,7 @@ export function createGame(name, options = {}) {
     status: "active", // active | finished
     winnerSide: null,
     turn: "r",
+    undoUsedByUser: { [userId]: 0 },
     moves: [],
     snapshots: [createInitialBoard()],
   };
@@ -1322,6 +1346,7 @@ export function getGame(gameId) {
 }
 
 export function getSnapshot(gameId, plyIndex) {
+  const { userId } = requireCurrentUser();
   const game = getGame(gameId);
   const max = game.snapshots.length - 1;
   const index = Math.max(0, Math.min(plyIndex, max));
@@ -1336,6 +1361,9 @@ export function getSnapshot(gameId, plyIndex) {
     aiLevel: game.aiLevel || null,
     status: game.status || "active",
     winnerSide: game.winnerSide || null,
+    undoUsed: getUndoUsed(game, userId),
+    undoRemaining: getUndoRemaining(game, userId),
+    undoLimit: UNDO_LIMIT_PER_USER,
     latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
@@ -1395,6 +1423,47 @@ export function endGame(gameId, { keepRecord = true } = {}) {
   return { keepRecord };
 }
 
+export function undoGameMove(gameId) {
+  const { db, userId } = requireCurrentUser();
+  const game = db.games.find((g) => g.id === gameId && g.userId === userId);
+  if (!game) throw new Error("对局不存在或无权限");
+  if (!Array.isArray(game.moves) || game.moves.length === 0) throw new Error("当前没有可悔棋步");
+  const remaining = getUndoRemaining(game, userId);
+  if (remaining <= 0) throw new Error(`本局悔棋次数已用完（上限 ${UNDO_LIMIT_PER_USER} 次）`);
+
+  let keepMoveCount = game.moves.length - 1;
+  if (game.mode === "ai") {
+    const mySide = oppositeSide(game.aiSide || "b");
+    let myLastIndex = -1;
+    for (let i = game.moves.length - 1; i >= 0; i -= 1) {
+      if (game.moves[i]?.piece?.[0] === mySide) {
+        myLastIndex = i;
+        break;
+      }
+    }
+    if (myLastIndex < 0) throw new Error("当前没有可撤销的“你方”走子");
+    keepMoveCount = myLastIndex;
+  }
+
+  trimOwnerMoves(game, keepMoveCount);
+  const review = db.reviews.find((r) => r.gameId === gameId);
+  if (review && Array.isArray(review.tags)) {
+    review.tags = review.tags.filter((t) => t.plyIndex <= keepMoveCount);
+    review.updatedAt = new Date().toISOString();
+  }
+  game.turn = keepMoveCount % 2 === 0 ? "r" : "b";
+  game.status = "active";
+  game.winnerSide = null;
+  bumpUndoUsed(game, userId);
+  game.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return {
+    undoUsed: getUndoUsed(game, userId),
+    undoRemaining: getUndoRemaining(game, userId),
+    undoLimit: UNDO_LIMIT_PER_USER,
+  };
+}
+
 function makeBattleCode(db) {
   let code = "";
   do {
@@ -1424,6 +1493,7 @@ export function createBattle(name) {
     status: "waiting", // waiting | active | finished
     winnerSide: null,
     turn: "r",
+    undoUsedByUser: { [userId]: 0 },
     moves: [],
     snapshots: [createInitialBoard()],
   };
@@ -1488,6 +1558,7 @@ export function getBattle(battleId) {
 }
 
 export function getBattleSnapshot(battleId, plyIndex) {
+  const { userId } = requireCurrentUser();
   const battle = getBattle(battleId);
   const max = battle.snapshots.length - 1;
   const index = Math.max(0, Math.min(plyIndex, max));
@@ -1499,6 +1570,9 @@ export function getBattleSnapshot(battleId, plyIndex) {
     turn: index === max ? battle.turn : index % 2 === 0 ? "r" : "b",
     status: battle.status,
     winnerSide: battle.winnerSide,
+    undoUsed: getUndoUsed(battle, userId),
+    undoRemaining: getUndoRemaining(battle, userId),
+    undoLimit: UNDO_LIMIT_PER_USER,
     latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
@@ -1565,4 +1639,33 @@ export function endBattle(battleId, { keepRecord = true } = {}) {
   }
   saveDb(db);
   return { keepRecord };
+}
+
+export function undoBattleMove(battleId) {
+  const { db, userId } = requireCurrentUser();
+  const battle = db.battles.find((b) => b.id === battleId);
+  if (!battle) throw new Error("对战不存在");
+  const side = userBattleSide(battle, userId);
+  if (!side) throw new Error("无权限操作该对战");
+  if (!Array.isArray(battle.moves) || battle.moves.length === 0) throw new Error("当前没有可悔棋步");
+  const remaining = getUndoRemaining(battle, userId);
+  if (remaining <= 0) throw new Error(`本局悔棋次数已用完（上限 ${UNDO_LIMIT_PER_USER} 次）`);
+
+  const lastMove = battle.moves[battle.moves.length - 1];
+  if (!lastMove || lastMove.piece?.[0] !== side) {
+    throw new Error("仅可撤销你刚走的一步（对手已走子则不可悔）");
+  }
+
+  trimOwnerMoves(battle, battle.moves.length - 1);
+  battle.turn = side;
+  battle.status = battle.redUserId && battle.blackUserId ? "active" : "waiting";
+  battle.winnerSide = null;
+  bumpUndoUsed(battle, userId);
+  battle.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return {
+    undoUsed: getUndoUsed(battle, userId),
+    undoRemaining: getUndoRemaining(battle, userId),
+    undoLimit: UNDO_LIMIT_PER_USER,
+  };
 }
