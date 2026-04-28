@@ -97,6 +97,7 @@ const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
 let battleSyncTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
+const MOVE_FX_DURATION_MS = 1000;
 const moveFxState = {
   game: { id: null, index: 0 },
   battle: { id: null, index: 0 },
@@ -155,22 +156,26 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
   });
   setTimeout(() => {
     ghost.remove();
-  }, 280);
+  }, MOVE_FX_DURATION_MS + 140);
 
   if (move.captured) {
-    const burst = createFxNode("capture-burst", toRow, toCol);
-    const shock = createFxNode("capture-shockwave", toRow, toCol);
-    boardPointsEl.appendChild(burst);
-    boardPointsEl.appendChild(shock);
-    spawnCaptureParticles(boardPointsEl, toRow, toCol, 16);
-    setTimeout(() => burst.remove(), 440);
-    setTimeout(() => shock.remove(), 520);
+    setTimeout(() => {
+      const burst = createFxNode("capture-burst", toRow, toCol);
+      const shock = createFxNode("capture-shockwave", toRow, toCol);
+      boardPointsEl.appendChild(burst);
+      boardPointsEl.appendChild(shock);
+      spawnCaptureParticles(boardPointsEl, toRow, toCol, 16);
+      setTimeout(() => burst.remove(), 440);
+      setTimeout(() => shock.remove(), 520);
+    }, Math.max(760, MOVE_FX_DURATION_MS - 220));
   }
 
   if (checkAlert) {
-    const flash = createFxNode("check-flash", toRow, toCol);
-    boardPointsEl.appendChild(flash);
-    setTimeout(() => flash.remove(), 420);
+    setTimeout(() => {
+      const flash = createFxNode("check-flash", toRow, toCol);
+      boardPointsEl.appendChild(flash);
+      setTimeout(() => flash.remove(), 420);
+    }, Math.max(780, MOVE_FX_DURATION_MS - 200));
   }
 }
 
