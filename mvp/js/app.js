@@ -101,6 +101,7 @@ const MOVE_FX_DURATION_MS = 1000;
 const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
 let sfxUnlocked = false;
+let sfxMasterGain = null;
 const moveFxState = {
   game: { id: null, index: 0, checkToken: "" },
   battle: { id: null, index: 0, checkToken: "" },
@@ -128,11 +129,38 @@ function ensureSfxContext() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     sfxAudioCtx = new Ctx();
+    const compressor = sfxAudioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -20;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 3;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.2;
+    sfxMasterGain = sfxAudioCtx.createGain();
+    sfxMasterGain.gain.value = 1.2;
+    compressor.connect(sfxMasterGain).connect(sfxAudioCtx.destination);
   }
   if (sfxAudioCtx.state === "suspended") {
     sfxAudioCtx.resume().catch(() => {});
   }
   return sfxAudioCtx;
+}
+
+function sfxDestination(ctx) {
+  return sfxMasterGain || ctx.destination;
+}
+
+function unlockSfxFromGesture({ preview = false } = {}) {
+  const ctx = ensureSfxContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  if (!sfxUnlocked) {
+    sfxUnlocked = true;
+    const t = ctx.currentTime + 0.01;
+    // Warm-up tone to satisfy iOS audio activation chain.
+    playSine(ctx, t, 440, 0.02, preview ? 0.028 : 0.00012);
+  }
 }
 
 function playSine(ctx, when, freq, duration, gain = 0.06) {
@@ -143,7 +171,7 @@ function playSine(ctx, when, freq, duration, gain = 0.06) {
   g.gain.setValueAtTime(0.0001, when);
   g.gain.exponentialRampToValueAtTime(gain, when + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-  osc.connect(g).connect(ctx.destination);
+  osc.connect(g).connect(sfxDestination(ctx));
   osc.start(when);
   osc.stop(when + duration + 0.01);
 }
@@ -167,7 +195,7 @@ function playNoiseBurst(ctx, when, duration = 0.16, gain = 0.05) {
   g.gain.setValueAtTime(0.0001, when);
   g.gain.exponentialRampToValueAtTime(gain, when + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-  src.connect(hp).connect(lp).connect(g).connect(ctx.destination);
+  src.connect(hp).connect(lp).connect(g).connect(sfxDestination(ctx));
   src.start(when);
   src.stop(when + duration + 0.01);
 }
@@ -176,25 +204,25 @@ function playMoveSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 420, 0.06, 0.045);
-  playSine(ctx, t + 0.02, 290, 0.08, 0.04);
+  playSine(ctx, t, 460, 0.07, 0.1);
+  playSine(ctx, t + 0.025, 315, 0.1, 0.085);
 }
 
 function playCaptureSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 220, 0.09, 0.07);
-  playSine(ctx, t + 0.03, 150, 0.12, 0.06);
-  playNoiseBurst(ctx, t + 0.02, 0.14, 0.045);
+  playSine(ctx, t, 240, 0.11, 0.14);
+  playSine(ctx, t + 0.03, 170, 0.14, 0.12);
+  playNoiseBurst(ctx, t + 0.016, 0.16, 0.095);
 }
 
 function playCheckSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 520, 0.12, 0.05);
-  playSine(ctx, t + 0.11, 700, 0.15, 0.055);
+  playSine(ctx, t, 560, 0.14, 0.1);
+  playSine(ctx, t + 0.11, 760, 0.17, 0.11);
 }
 
 function showCheckCallout(boardPointsEl) {
@@ -662,6 +690,7 @@ function renderBattleBoard() {
 }
 
 function onBoardCellClick(row, col, code, snap) {
+  unlockSfxFromGesture();
   if (snap.index < snap.max) {
     boardStatus.textContent = "当前在回放模式，请先回到最后一步再继续录入。";
     return;
@@ -696,6 +725,7 @@ function onBoardCellClick(row, col, code, snap) {
 }
 
 function onBattleCellClick(row, col, code, snap, role) {
+  unlockSfxFromGesture();
   if (snap.index < snap.max) {
     battleStatus.textContent = "当前在回放模式，请先回到最后一步再继续走子。";
     return;
@@ -1259,18 +1289,22 @@ window.addEventListener("focus", () => {
   syncBattleIfNeeded();
 });
 
-document.addEventListener(
-  "pointerdown",
-  () => {
-    const ctx = ensureSfxContext();
-    if (!ctx) return;
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-    sfxUnlocked = true;
-  },
-  { passive: true },
-);
+const unlockEvents = ["pointerdown", "touchstart", "mousedown", "keydown", "click"];
+unlockEvents.forEach((evt) => {
+  document.addEventListener(
+    evt,
+    () => {
+      unlockSfxFromGesture();
+    },
+    { passive: true },
+  );
+});
+
+window.addEventListener("pageshow", () => {
+  if (sfxAudioCtx && sfxAudioCtx.state === "suspended") {
+    sfxAudioCtx.resume().catch(() => {});
+  }
+});
 
 setupGameModeControls();
 renderAll();
