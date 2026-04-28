@@ -98,6 +98,9 @@ let battleSyncTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
 const MOVE_FX_DURATION_MS = 1000;
+const CHECK_CALLOUT_DURATION_MS = 2000;
+let sfxAudioCtx = null;
+let sfxUnlocked = false;
 const moveFxState = {
   game: { id: null, index: 0 },
   battle: { id: null, index: 0 },
@@ -118,6 +121,92 @@ function createFxNode(className, row, col, text = "") {
   node.style.top = pointTopPercent(row);
   if (text) node.textContent = text;
   return node;
+}
+
+function ensureSfxContext() {
+  if (!sfxAudioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    sfxAudioCtx = new Ctx();
+  }
+  if (sfxAudioCtx.state === "suspended") {
+    sfxAudioCtx.resume().catch(() => {});
+  }
+  return sfxAudioCtx;
+}
+
+function playSine(ctx, when, freq, duration, gain = 0.06) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(gain, when + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(when);
+  osc.stop(when + duration + 0.01);
+}
+
+function playNoiseBurst(ctx, when, duration = 0.16, gain = 0.05) {
+  const size = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < size; i += 1) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 700;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 2600;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(gain, when + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+  src.connect(hp).connect(lp).connect(g).connect(ctx.destination);
+  src.start(when);
+  src.stop(when + duration + 0.01);
+}
+
+function playMoveSfx(delayMs = 0) {
+  const ctx = ensureSfxContext();
+  if (!ctx || !sfxUnlocked) return;
+  const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
+  playSine(ctx, t, 420, 0.06, 0.045);
+  playSine(ctx, t + 0.02, 290, 0.08, 0.04);
+}
+
+function playCaptureSfx(delayMs = 0) {
+  const ctx = ensureSfxContext();
+  if (!ctx || !sfxUnlocked) return;
+  const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
+  playSine(ctx, t, 220, 0.09, 0.07);
+  playSine(ctx, t + 0.03, 150, 0.12, 0.06);
+  playNoiseBurst(ctx, t + 0.02, 0.14, 0.045);
+}
+
+function playCheckSfx(delayMs = 0) {
+  const ctx = ensureSfxContext();
+  if (!ctx || !sfxUnlocked) return;
+  const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
+  playSine(ctx, t, 520, 0.12, 0.05);
+  playSine(ctx, t + 0.11, 700, 0.15, 0.055);
+}
+
+function showCheckCallout(boardPointsEl) {
+  const host = boardPointsEl?.parentElement;
+  if (!host) return;
+  const old = host.querySelector(".check-callout");
+  if (old) old.remove();
+  const node = document.createElement("div");
+  node.className = "check-callout";
+  node.textContent = "将军";
+  host.appendChild(node);
+  setTimeout(() => node.remove(), CHECK_CALLOUT_DURATION_MS);
 }
 
 function spawnCaptureParticles(boardPointsEl, row, col, count = 14) {
@@ -154,6 +243,12 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
     ghost.style.left = pointLeftPercent(toCol);
     ghost.style.top = pointTopPercent(toRow);
   });
+  const impactDelayMs = Math.max(760, MOVE_FX_DURATION_MS - 220);
+  if (move.captured) {
+    playCaptureSfx(impactDelayMs);
+  } else {
+    playMoveSfx(impactDelayMs);
+  }
   setTimeout(() => {
     ghost.remove();
   }, MOVE_FX_DURATION_MS + 140);
@@ -167,7 +262,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
       spawnCaptureParticles(boardPointsEl, toRow, toCol, 16);
       setTimeout(() => burst.remove(), 440);
       setTimeout(() => shock.remove(), 520);
-    }, Math.max(760, MOVE_FX_DURATION_MS - 220));
+    }, impactDelayMs);
   }
 
   if (checkAlert) {
@@ -175,6 +270,8 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
       const flash = createFxNode("check-flash", toRow, toCol);
       boardPointsEl.appendChild(flash);
       setTimeout(() => flash.remove(), 420);
+      showCheckCallout(boardPointsEl);
+      playCheckSfx();
     }, Math.max(780, MOVE_FX_DURATION_MS - 200));
   }
 }
@@ -1145,6 +1242,19 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("focus", () => {
   syncBattleIfNeeded();
 });
+
+document.addEventListener(
+  "pointerdown",
+  () => {
+    const ctx = ensureSfxContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+    sfxUnlocked = true;
+  },
+  { passive: true },
+);
 
 setupGameModeControls();
 renderAll();

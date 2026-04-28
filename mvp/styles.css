@@ -356,6 +356,24 @@ hr {
   animation: check-flash 420ms ease-out forwards;
 }
 
+.check-callout {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  color: #b42318;
+  font-family: "STKaiti", "KaiTi", "Songti SC", serif;
+  font-size: clamp(30px, 8vw, 44px);
+  line-height: 1;
+  letter-spacing: 4px;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 12px rgba(196, 43, 30, 0.35);
+  pointer-events: none;
+  z-index: 8;
+  animation: check-callout 2s ease-out forwards;
+}
+
 @keyframes pick-up-bob {
   0%,
   100% {
@@ -417,6 +435,25 @@ hr {
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.35);
+  }
+}
+
+@keyframes check-callout {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.72) translateY(-4px);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.06) translateY(0);
+  }
+  70% {
+    opacity: 0.96;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1) translateY(2px);
   }
 }
 
