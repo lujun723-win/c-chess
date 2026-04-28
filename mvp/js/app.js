@@ -83,6 +83,10 @@ const battleState = {
   selected: null,
 };
 
+const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
+const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
+let battleSyncTimer = null;
+
 function getOwnedFamily() {
   const user = getCurrentUser();
   if (!user) return null;
@@ -579,6 +583,30 @@ function renderAll() {
   permissionResult.textContent = "";
 }
 
+function syncBattleIfNeeded() {
+  if (!battleState.battleId) return;
+  const user = getCurrentUser();
+  if (!user) return;
+  // Preserve current interaction state; renderBattleBoard keeps selected piece highlight.
+  renderBattleList();
+  renderBattleBoard();
+}
+
+function restartBattleAutoSyncLoop() {
+  if (battleSyncTimer) {
+    clearInterval(battleSyncTimer);
+    battleSyncTimer = null;
+  }
+  const interval = document.hidden ? BATTLE_SYNC_INTERVAL_IDLE_MS : BATTLE_SYNC_INTERVAL_ACTIVE_MS;
+  battleSyncTimer = setInterval(() => {
+    try {
+      syncBattleIfNeeded();
+    } catch (_err) {
+      // Ignore transient sync errors and keep loop alive.
+    }
+  }, interval);
+}
+
 function setupGameModeControls() {
   const levels = getAiLevels();
   if (!aiLevelSelect.options.length) {
@@ -833,5 +861,17 @@ battleLastPlyBtn.addEventListener("click", () => {
   renderBattleBoard();
 });
 
+document.addEventListener("visibilitychange", () => {
+  restartBattleAutoSyncLoop();
+  if (!document.hidden) {
+    syncBattleIfNeeded();
+  }
+});
+
+window.addEventListener("focus", () => {
+  syncBattleIfNeeded();
+});
+
 setupGameModeControls();
 renderAll();
+restartBattleAutoSyncLoop();
