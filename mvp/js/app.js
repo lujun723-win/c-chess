@@ -87,6 +87,8 @@ const battleState = {
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
 const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
 let battleSyncTimer = null;
+let battleEventsSource = null;
+let battleSyncFromEventTimer = null;
 
 function getOwnedFamily() {
   const user = getCurrentUser();
@@ -601,6 +603,45 @@ function syncBattleIfNeeded() {
   renderBattleBoard();
 }
 
+function scheduleBattleSyncFromEvent() {
+  if (battleSyncFromEventTimer) return;
+  battleSyncFromEventTimer = setTimeout(() => {
+    battleSyncFromEventTimer = null;
+    try {
+      syncBattleIfNeeded();
+    } catch (_err) {
+      // keep UI loop resilient
+    }
+  }, 80);
+}
+
+function restartBattleRealtimeChannel() {
+  if (battleEventsSource) {
+    try {
+      battleEventsSource.close();
+    } catch (_err) {
+      // ignore
+    }
+    battleEventsSource = null;
+  }
+  if (typeof EventSource === "undefined") return;
+  const source = new EventSource("/api/events");
+  source.addEventListener("db-updated", () => {
+    scheduleBattleSyncFromEvent();
+  });
+  source.addEventListener("ready", () => {
+    scheduleBattleSyncFromEvent();
+  });
+  source.onerror = () => {
+    if (source.readyState === EventSource.CLOSED) {
+      setTimeout(() => {
+        restartBattleRealtimeChannel();
+      }, 1800);
+    }
+  };
+  battleEventsSource = source;
+}
+
 function restartBattleAutoSyncLoop() {
   if (battleSyncTimer) {
     clearInterval(battleSyncTimer);
@@ -879,6 +920,9 @@ battleLastPlyBtn.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", () => {
   restartBattleAutoSyncLoop();
+  if (!battleEventsSource || battleEventsSource.readyState === EventSource.CLOSED) {
+    restartBattleRealtimeChannel();
+  }
   if (!document.hidden) {
     syncBattleIfNeeded();
   }
@@ -891,3 +935,4 @@ window.addEventListener("focus", () => {
 setupGameModeControls();
 renderAll();
 restartBattleAutoSyncLoop();
+restartBattleRealtimeChannel();

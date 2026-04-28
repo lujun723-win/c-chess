@@ -14,6 +14,8 @@ const DB_PATH = path.join(DATA_DIR, "db.json");
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || "0.0.0.0";
 const MDNS_ALIAS = (process.env.MDNS_ALIAS || "chess.local").trim().toLowerCase();
+let dbVersion = 0;
+const sseClients = new Set();
 
 function defaultDb() {
   return {
@@ -93,6 +95,38 @@ function sendText(res, status, text) {
     "cache-control": "no-store",
   });
   res.end(text);
+}
+
+function writeSseEvent(res, event, payload) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function addSseClient(res) {
+  sseClients.add(res);
+  writeSseEvent(res, "ready", { dbVersion, time: new Date().toISOString() });
+}
+
+function removeSseClient(res) {
+  if (!sseClients.has(res)) return;
+  sseClients.delete(res);
+}
+
+function broadcastDbUpdated(reason = "save") {
+  dbVersion += 1;
+  const payload = { dbVersion, reason, time: new Date().toISOString() };
+  for (const client of sseClients) {
+    try {
+      writeSseEvent(client, "db-updated", payload);
+    } catch (_err) {
+      removeSseClient(client);
+      try {
+        client.end();
+      } catch (_endErr) {
+        // ignore
+      }
+    }
+  }
 }
 
 function readBody(req) {
@@ -299,6 +333,32 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/events") {
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      });
+      res.write(`retry: 1500\n\n`);
+      addSseClient(res);
+      const keepAlive = setInterval(() => {
+        try {
+          res.write(`: heartbeat ${Date.now()}\n\n`);
+        } catch (_err) {
+          // no-op, close handler will cleanup
+        }
+      }, 20000);
+      req.on("close", () => {
+        clearInterval(keepAlive);
+        removeSseClient(res);
+      });
+      req.on("error", () => {
+        clearInterval(keepAlive);
+        removeSseClient(res);
+      });
+      return;
+    }
+
     if (req.method === "PUT" && pathname === "/api/db") {
       const raw = await readBody(req);
       let parsed = null;
@@ -309,6 +369,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const stable = await writeDb(parsed);
+      broadcastDbUpdated("put-db");
       sendJson(res, 200, stable);
       return;
     }

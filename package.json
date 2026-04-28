@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "test:regression": "node mvp/tests/assessment-regression.test.js"
+    "test:regression": "node mvp/tests/assessment-regression.test.js",
+    "test:realtime-sync": "node mvp/tests/realtime-sync.test.js"
   }
 }
