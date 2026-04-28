@@ -1,0 +1,8 @@
+{
+  "name": "c-chess",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:regression": "node mvp/tests/assessment-regression.test.js"
+  }
+}

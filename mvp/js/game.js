@@ -11,8 +11,12 @@ function cloneBoard(board) {
   return board.map((row) => [...row]);
 }
 
+export function createEmptyBoard() {
+  return Array.from({ length: 10 }, () => Array(9).fill(""));
+}
+
 export function createInitialBoard() {
-  const board = Array.from({ length: 10 }, () => Array(9).fill(""));
+  const board = createEmptyBoard();
   // Black side
   board[0] = ["bR", "bN", "bB", "bA", "bK", "bA", "bB", "bN", "bR"];
   board[2][1] = "bC";
@@ -32,6 +36,18 @@ export function createInitialBoard() {
   board[6][4] = "rP";
   board[6][6] = "rP";
   board[6][8] = "rP";
+  return board;
+}
+
+export function createBoardFromPieces(pieces) {
+  const board = createEmptyBoard();
+  for (const item of pieces || []) {
+    if (!item) continue;
+    const { row, col, code } = item;
+    if (!inBoard(row, col)) throw new Error(`棋子坐标非法: (${row}, ${col})`);
+    if (!code || typeof code !== "string") throw new Error("棋子编码非法");
+    board[row][col] = code;
+  }
   return board;
 }
 
@@ -180,6 +196,37 @@ export function toChineseNotation(move, boardBefore = null) {
   const part3 = actionWord(side, fr, tr, fc, tc);
   const part4 = moveDestinationText(piece, fr, tr, fc, tc);
   return `${part1}${part3}${part4}`;
+}
+
+export function buildRawMove(board, fromRow, fromCol, toRow, toCol) {
+  const piece = board?.[fromRow]?.[fromCol];
+  if (!piece) throw new Error("起点没有棋子");
+  return {
+    from: [fromRow, fromCol],
+    to: [toRow, toCol],
+    piece,
+    captured: board?.[toRow]?.[toCol] || "",
+  };
+}
+
+export function assessMoveForRegression(
+  boardBefore,
+  rawMove,
+  { side = rawMove?.piece?.[0], evalDepth = 2, externalBestMove = null } = {},
+) {
+  if (!side) throw new Error("缺少走棋方 side");
+  const assessment = assessMove(
+    cloneBoard(boardBefore),
+    rawMove,
+    side,
+    evalDepth,
+    null,
+    externalBestMove ? { move: externalBestMove } : null,
+  );
+  return {
+    ...assessment,
+    riskMaterialLossLabel: RISK_MATERIAL_LOSS,
+  };
 }
 
 function inBoard(row, col) {
@@ -362,12 +409,20 @@ const AI_LEVELS = {
     id: "hard",
     label: "进阶",
     thinkDepth: 2,
-    evalDepth: 2,
+    evalDepth: 3,
     randomness: 0.05,
     topPool: 1,
   },
 };
-const ASSESSMENT_ENGINE_VERSION = "xqwlight-v1";
+const ASSESSMENT_ENGINE_VERSION = "xqwlight-v2";
+const RISK_MATERIAL_LOSS = "落点净亏风险";
+
+export function getAssessmentRiskLabels() {
+  return {
+    materialLoss: RISK_MATERIAL_LOSS,
+    checkThreat: "下一步可能被将",
+  };
+}
 
 function oppositeSide(side) {
   return side === "r" ? "b" : "r";
@@ -572,22 +627,28 @@ function rankMoves(board, turn, depth) {
   return scored;
 }
 
-function canSquareBeCaptured(board, row, col, bySide) {
+function legalCapturesToSquare(board, row, col, bySide) {
   const target = board[row][col];
-  if (!target || target[0] === bySide) return false;
+  if (!target || target[0] === bySide) return [];
+  const captures = [];
   for (let fr = 0; fr < 10; fr += 1) {
     for (let fc = 0; fc < 9; fc += 1) {
       const p = board[fr][fc];
       if (!p || p[0] !== bySide) continue;
       try {
         validateMoveOrThrow(board, fr, fc, row, col, bySide);
-        return true;
+        captures.push({
+          from: [fr, fc],
+          to: [row, col],
+          piece: p,
+          captured: target,
+        });
       } catch (_err) {
         // continue
       }
     }
   }
-  return false;
+  return captures;
 }
 
 function canGiveCheckInOne(board, attackerSide, defenderSide) {
@@ -600,26 +661,124 @@ function canGiveCheckInOne(board, attackerSide, defenderSide) {
 }
 
 function classifyGap(gap) {
-  if (gap <= 0.4) return { key: "best", label: "最优" };
-  if (gap <= 1.8) return { key: "good", label: "可行" };
-  if (gap <= 3.8) return { key: "inaccuracy", label: "有更优" };
+  if (gap <= 0.35) return { key: "best", label: "最优" };
+  if (gap <= 1.5) return { key: "good", label: "可行" };
+  if (gap <= 3.6) return { key: "inaccuracy", label: "有更优" };
   return { key: "mistake", label: "失误" };
+}
+
+function countPieces(board) {
+  let n = 0;
+  for (let r = 0; r < 10; r += 1) {
+    for (let c = 0; c < 9; c += 1) {
+      if (board[r][c]) n += 1;
+    }
+  }
+  return n;
+}
+
+function shouldDownrankOpeningMistake(boardBefore, boardAfter, rawMove, side) {
+  if (!rawMove || rawMove.captured) return false;
+  if (countPieces(boardBefore) < 30) return false;
+  if (isInCheck(boardBefore, side)) return false;
+  if (isInCheck(boardAfter, side)) return false;
+  // Keep opening labels conservative when no tactical events happened yet.
+  return true;
+}
+
+function isLegalMove(board, move, side) {
+  if (!move) return false;
+  try {
+    validateMoveOrThrow(
+      board,
+      move.from[0],
+      move.from[1],
+      move.to[0],
+      move.to[1],
+      side,
+    );
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function findScoreInRanked(scoredMoves, move) {
+  const hit = scoredMoves.find((x) => sameMove(x.move, move));
+  return hit ? hit.score : null;
+}
+
+function scoreMoveByFallback(boardBefore, move, side, evalDepth, preRanked = null) {
+  if (!move || !isLegalMove(boardBefore, move, side)) return -Infinity;
+  const scoredMoves = preRanked || rankMoves(boardBefore, side, evalDepth);
+  const fromRanked = findScoreInRanked(scoredMoves, move);
+  if (typeof fromRanked === "number") return fromRanked;
+  const effectiveDepth = Math.max(1, Math.min(3, evalDepth || 1));
+  const boardAfter = applyMove(
+    boardBefore,
+    move.from[0],
+    move.from[1],
+    move.to[0],
+    move.to[1],
+  );
+  return -negamax(boardAfter, oppositeSide(side), effectiveDepth - 1, -Infinity, Infinity);
+}
+
+function bestRecaptureValue(boardAfterEnemyCapture, row, col, side) {
+  const recaptures = legalCapturesToSquare(boardAfterEnemyCapture, row, col, side);
+  if (!recaptures.length) return 0;
+  let best = 0;
+  for (const mv of recaptures) {
+    const gain = pieceValue(mv.captured || "");
+    if (gain > best) best = gain;
+  }
+  return best;
+}
+
+function estimateImmediateNetLoss(boardAfter, row, col, side, gainedMaterial = 0) {
+  const target = boardAfter[row]?.[col];
+  if (!target || target[0] !== side) return 0;
+  const enemy = oppositeSide(side);
+  const enemyCaptures = legalCapturesToSquare(boardAfter, row, col, enemy);
+  if (!enemyCaptures.length) return 0;
+  const selfValue = pieceValue(target);
+  let worstLoss = 0;
+  for (const cap of enemyCaptures) {
+    const boardAfterEnemyCapture = applyMove(
+      boardAfter,
+      cap.from[0],
+      cap.from[1],
+      cap.to[0],
+      cap.to[1],
+    );
+    const recaptureValue = bestRecaptureValue(boardAfterEnemyCapture, row, col, side);
+    const netLoss = Math.max(0, selfValue - recaptureValue - gainedMaterial);
+    if (netLoss > worstLoss) worstLoss = netLoss;
+  }
+  return worstLoss;
 }
 
 function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, externalBest = null) {
   const scoredMoves = preRanked || rankMoves(boardBefore, side, evalDepth);
-  const chosen = scoredMoves.find((x) => sameMove(x.move, rawMove));
   const fallbackBest = scoredMoves[0] || null;
-  const bestMove = externalBest?.move || fallbackBest?.move || null;
-  const best = fallbackBest;
-  const bestScore = best ? best.score : 0;
-  const playedScore = chosen ? chosen.score : bestScore;
-  const scoreGap = Math.max(0, bestScore - playedScore);
+  const externalBestMove = externalBest?.move || null;
+  const hasExternalBest = Boolean(externalBestMove && isLegalMove(boardBefore, externalBestMove, side));
+  const bestMove = hasExternalBest ? externalBestMove : fallbackBest?.move || null;
+  const bestScore = scoreMoveByFallback(boardBefore, bestMove, side, evalDepth, scoredMoves);
+  const playedScore = scoreMoveByFallback(boardBefore, rawMove, side, evalDepth, scoredMoves);
+  const safeBestScore = Number.isFinite(bestScore) ? bestScore : 0;
+  const safePlayedScore = Number.isFinite(playedScore) ? playedScore : safeBestScore;
+  const scoreGap = Math.max(0, safeBestScore - safePlayedScore);
   let quality = classifyGap(scoreGap);
-  if (bestMove && sameMove(bestMove, rawMove)) {
+  if (rawMove.captured && rawMove.captured[1] === "K") {
     quality = { key: "best", label: "最优" };
-  } else if (externalBest?.move) {
-    // If strong external engine says "not best", avoid over-harsh labels on shallow fallback scores.
+  } else if (bestMove && sameMove(bestMove, rawMove)) {
+    quality = { key: "best", label: "最优" };
+  } else if (hasExternalBest) {
+    // External engine and fallback disagree: keep label conservative.
+    if (quality.key === "best") {
+      quality = { key: "inaccuracy", label: "有更优" };
+    }
     if (quality.key === "mistake" && scoreGap < 6) {
       quality = { key: "inaccuracy", label: "有更优" };
     }
@@ -634,11 +793,21 @@ function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, ext
   );
   const enemy = oppositeSide(side);
   const risks = [];
-  if (canSquareBeCaptured(boardAfter, rawMove.to[0], rawMove.to[1], enemy)) {
-    risks.push("落点可能被吃");
+  const immediateNetLoss = estimateImmediateNetLoss(
+    boardAfter,
+    rawMove.to[0],
+    rawMove.to[1],
+    side,
+    pieceValue(rawMove.captured || ""),
+  );
+  if (immediateNetLoss >= 1) {
+    risks.push(RISK_MATERIAL_LOSS);
   }
   if (canGiveCheckInOne(boardAfter, enemy, side)) {
     risks.push("下一步可能被将");
+  }
+  if (quality.key === "mistake" && shouldDownrankOpeningMistake(boardBefore, boardAfter, rawMove, side)) {
+    quality = { key: "inaccuracy", label: "有更优" };
   }
 
   return {
@@ -647,9 +816,10 @@ function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, ext
     scoreGap: Number(scoreGap.toFixed(2)),
     evalDepth,
     risks,
+    immediateNetLoss: Number(immediateNetLoss.toFixed(2)),
     bestMoveNotation: bestMove ? toChineseNotation(bestMove, boardBefore) : "",
     engineVersion: ASSESSMENT_ENGINE_VERSION,
-    engine: externalBest?.move ? "xqwlight+fallback" : "fallback",
+    engine: hasExternalBest ? "xqwlight+fallback" : "fallback",
   };
 }
 
@@ -868,6 +1038,7 @@ export function analyzeGame(gameId) {
     if (move.assessment?.quality === "best") tags.push("最优着法");
     if (move.assessment?.quality === "mistake") tags.push("明显失误");
     if (Array.isArray(move.assessment?.risks)) {
+      if (move.assessment.risks.includes(RISK_MATERIAL_LOSS)) tags.push("送子风险");
       if (move.assessment.risks.includes("落点可能被吃")) tags.push("送子风险");
       if (move.assessment.risks.includes("下一步可能被将")) tags.push("被将风险");
     }
@@ -893,7 +1064,7 @@ export function analyzeGame(gameId) {
     .map(([tag, count]) => ({ tag, count }));
 
   const suggestions = [];
-  if (tagCounter.get("送子风险")) suggestions.push("优先训练“子力安全检查”：每步先看落点是否被对方先手攻击。");
+  if (tagCounter.get("送子风险")) suggestions.push("优先训练“子力安全检查”：每步先看落点是否出现净亏交换。");
   if (tagCounter.get("反复调子")) suggestions.push("减少无效调子：同子二次往返前先确认是否带来实质收益。");
   if (tagCounter.get("应将")) suggestions.push("在受将场景下优先考虑“先解将，再争先”。");
   if (suggestions.length === 0) suggestions.push("先补充手动标签，系统会给出更精准建议。");

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Assessment Regression</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+        margin: 24px;
+        line-height: 1.5;
+      }
+      .pass {
+        color: #0a7a35;
+      }
+      .fail {
+        color: #b42318;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f8f8f8;
+        border: 1px solid #e5e5e5;
+        padding: 12px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>评估回归测试</h1>
+    <div id="summary">运行中...</div>
+    <pre id="log"></pre>
+    <script type="module" src="./assessment-regression.web.js"></script>
+  </body>
+</html>
