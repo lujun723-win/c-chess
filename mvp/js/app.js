@@ -17,6 +17,7 @@ import {
   makeMove,
   endGame,
   undoGameMove,
+  runAiTurnIfReady,
   pieceLabel,
   getGame,
   toChineseNotation,
@@ -96,7 +97,10 @@ const battleState = {
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
 const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
+const AI_SYNC_INTERVAL_ACTIVE_MS = 600;
+const AI_SYNC_INTERVAL_IDLE_MS = 1200;
 let battleSyncTimer = null;
+let aiSyncTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
 const MOVE_FX_DURATION_MS = 1000;
@@ -220,13 +224,45 @@ function playNoiseBurst(ctx, when, duration = 0.16, gain = 0.05) {
   src.stop(when + duration + 0.01);
 }
 
+function playWoodClick(ctx, when, { pitch = 220, gain = 0.13, sharp = 1 } = {}) {
+  const body = ctx.createOscillator();
+  body.type = "triangle";
+  body.frequency.setValueAtTime(pitch, when);
+  const bodyGain = ctx.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, when);
+  bodyGain.gain.exponentialRampToValueAtTime(gain, when + 0.008);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.11);
+
+  const click = ctx.createOscillator();
+  click.type = "square";
+  click.frequency.setValueAtTime(pitch * (2.7 + sharp * 0.35), when);
+  const clickGain = ctx.createGain();
+  clickGain.gain.setValueAtTime(0.0001, when);
+  clickGain.gain.exponentialRampToValueAtTime(gain * (0.45 + sharp * 0.15), when + 0.003);
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.032);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 180;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 3600;
+
+  body.connect(bodyGain).connect(hp).connect(lp).connect(sfxDestination(ctx));
+  click.connect(clickGain).connect(hp).connect(lp).connect(sfxDestination(ctx));
+  body.start(when);
+  click.start(when);
+  body.stop(when + 0.12);
+  click.stop(when + 0.04);
+}
+
 function playMoveSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
   refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 460, 0.07, 0.1);
-  playSine(ctx, t + 0.025, 315, 0.1, 0.085);
+  playWoodClick(ctx, t, { pitch: 250, gain: 0.11, sharp: 1.1 });
+  playWoodClick(ctx, t + 0.02, { pitch: 198, gain: 0.065, sharp: 0.8 });
 }
 
 function playCaptureSfx(delayMs = 0) {
@@ -234,9 +270,9 @@ function playCaptureSfx(delayMs = 0) {
   if (!ctx || !sfxUnlocked) return;
   refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 240, 0.11, 0.14);
-  playSine(ctx, t + 0.03, 170, 0.14, 0.12);
-  playNoiseBurst(ctx, t + 0.016, 0.16, 0.095);
+  playWoodClick(ctx, t, { pitch: 190, gain: 0.15, sharp: 0.75 });
+  playWoodClick(ctx, t + 0.03, { pitch: 145, gain: 0.11, sharp: 0.55 });
+  playNoiseBurst(ctx, t + 0.012, 0.14, 0.1);
 }
 
 function playCheckSfx(delayMs = 0) {
@@ -244,8 +280,8 @@ function playCheckSfx(delayMs = 0) {
   if (!ctx || !sfxUnlocked) return;
   refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
-  playSine(ctx, t, 560, 0.14, 0.1);
-  playSine(ctx, t + 0.11, 760, 0.17, 0.11);
+  playWoodClick(ctx, t, { pitch: 320, gain: 0.12, sharp: 1.25 });
+  playWoodClick(ctx, t + 0.11, { pitch: 430, gain: 0.14, sharp: 1.35 });
 }
 
 function showCheckCallout(boardPointsEl) {
@@ -592,6 +628,10 @@ function renderBoard() {
       modeLine += `（你执${mySide}，电脑${sideText(snap.aiSide)}，难度：${
         game.aiLevel || "normal"
       }）`;
+      if (snap.aiThinking) {
+        const secs = Math.max(0.1, snap.aiThinkMsLeft / 1000).toFixed(1);
+        modeLine += `\n电脑思考中…（约 ${secs}s）`;
+      }
     }
     const endLine =
       snap.status === "finished"
@@ -913,6 +953,23 @@ function syncBattleIfNeeded() {
   renderBattleBoard();
 }
 
+function syncAiIfNeeded() {
+  if (!gameState.gameId) return;
+  const user = getCurrentUser();
+  if (!user) return;
+  try {
+    const game = getGame(gameState.gameId);
+    if (game.mode !== "ai" || game.status !== "active" || game.turn !== game.aiSide) return;
+    const res = runAiTurnIfReady(gameState.gameId);
+    if (res.moved || res.aiThinking) {
+      renderGameList();
+      renderBoard();
+    }
+  } catch (_err) {
+    // Keep UI loop resilient.
+  }
+}
+
 function scheduleBattleSyncFromEvent() {
   if (battleSyncFromEventTimer) return;
   battleSyncFromEventTimer = setTimeout(() => {
@@ -964,6 +1021,17 @@ function restartBattleAutoSyncLoop() {
     } catch (_err) {
       // Ignore transient sync errors and keep loop alive.
     }
+  }, interval);
+}
+
+function restartAiAutoSyncLoop() {
+  if (aiSyncTimer) {
+    clearInterval(aiSyncTimer);
+    aiSyncTimer = null;
+  }
+  const interval = document.hidden ? AI_SYNC_INTERVAL_IDLE_MS : AI_SYNC_INTERVAL_ACTIVE_MS;
+  aiSyncTimer = setInterval(() => {
+    syncAiIfNeeded();
   }, interval);
 }
 
@@ -1303,16 +1371,19 @@ battleLastPlyBtn.addEventListener("click", () => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  restartAiAutoSyncLoop();
   restartBattleAutoSyncLoop();
   if (!battleEventsSource || battleEventsSource.readyState === EventSource.CLOSED) {
     restartBattleRealtimeChannel();
   }
   if (!document.hidden) {
+    syncAiIfNeeded();
     syncBattleIfNeeded();
   }
 });
 
 window.addEventListener("focus", () => {
+  syncAiIfNeeded();
   syncBattleIfNeeded();
 });
 
@@ -1336,6 +1407,7 @@ window.addEventListener("pageshow", () => {
 
 setupGameModeControls();
 renderAll();
+restartAiAutoSyncLoop();
 restartBattleAutoSyncLoop();
 restartBattleRealtimeChannel();
 refreshSfxStatus();

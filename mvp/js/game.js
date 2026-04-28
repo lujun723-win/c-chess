@@ -498,6 +498,7 @@ const ASSESSMENT_ENGINE_VERSION = "xqwlight-v3";
 const RISK_MATERIAL_LOSS = "落点净亏风险";
 const RISK_THREE_PLY = "三步预演存在战术亏损";
 const UNDO_LIMIT_PER_USER = 3;
+const AI_THINK_MAX_MS = 15000;
 
 export function getAssessmentRiskLabels() {
   return {
@@ -1144,6 +1145,46 @@ function maybePlayAiTurn(game) {
   return true;
 }
 
+function clearAiThinkState(game) {
+  delete game.aiThinkDueAt;
+  delete game.aiThinkStartedAt;
+  delete game.aiThinkDurationMs;
+}
+
+function computeAiThinkMs(game) {
+  const level = getAiLevelConfig(game.aiLevel);
+  let baseMin = 1000;
+  let baseMax = 2600;
+  if (level.id === "normal") {
+    baseMin = 2400;
+    baseMax = 5200;
+  } else if (level.id === "hard") {
+    baseMin = 5000;
+    baseMax = 9800;
+  }
+  const base = baseMin + Math.floor(Math.random() * Math.max(1, baseMax - baseMin + 1));
+  const board = game.snapshots[game.snapshots.length - 1];
+  const aiSide = game.aiSide || "b";
+  const evalForAi = evaluateBoardForSide(board, aiSide);
+  const disadvantage = Math.max(0, -evalForAi);
+  const disadvantageBonus = Math.min(5000, Math.round(disadvantage * 620));
+  return Math.min(AI_THINK_MAX_MS, base + disadvantageBonus);
+}
+
+function scheduleAiThinkIfNeeded(game) {
+  if (game.mode !== "ai") return false;
+  if (game.status !== "active") return false;
+  if (game.turn !== game.aiSide) return false;
+  const now = Date.now();
+  const dueAtTs = game.aiThinkDueAt ? new Date(game.aiThinkDueAt).getTime() : 0;
+  if (Number.isFinite(dueAtTs) && dueAtTs > now) return false;
+  const thinkMs = computeAiThinkMs(game);
+  game.aiThinkStartedAt = new Date(now).toISOString();
+  game.aiThinkDurationMs = thinkMs;
+  game.aiThinkDueAt = new Date(now + thinkMs).toISOString();
+  return true;
+}
+
 function getOrCreateReviewBucket(db, gameId) {
   let review = db.reviews.find((r) => r.gameId === gameId);
   if (!review) {
@@ -1305,11 +1346,14 @@ export function createGame(name, options = {}) {
     winnerSide: null,
     turn: "r",
     undoUsedByUser: { [userId]: 0 },
+    aiThinkDueAt: null,
+    aiThinkStartedAt: null,
+    aiThinkDurationMs: null,
     moves: [],
     snapshots: [createInitialBoard()],
   };
-  // If AI takes red, let AI move first immediately.
-  maybePlayAiTurn(game);
+  // If AI takes red, schedule delayed opening move.
+  scheduleAiThinkIfNeeded(game);
   db.games.push(game);
   saveDb(db);
   return game;
@@ -1354,6 +1398,15 @@ export function getSnapshot(gameId, plyIndex) {
   const board = cloneBoard(game.snapshots[index]);
   const turn = index === max ? game.turn : index % 2 === 0 ? "r" : "b";
   const inCheck = isInCheck(board, turn);
+  const now = Date.now();
+  const thinkDue = game.aiThinkDueAt ? new Date(game.aiThinkDueAt).getTime() : 0;
+  const aiThinking = Boolean(
+    game.mode === "ai" &&
+      game.status === "active" &&
+      turn === game.aiSide &&
+      index === max &&
+      thinkDue > now,
+  );
   return {
     board,
     index,
@@ -1364,6 +1417,9 @@ export function getSnapshot(gameId, plyIndex) {
     aiLevel: game.aiLevel || null,
     status: game.status || "active",
     winnerSide: game.winnerSide || null,
+    aiThinking,
+    aiThinkMsLeft: aiThinking ? Math.max(0, thinkDue - now) : 0,
+    aiThinkDueAt: game.aiThinkDueAt || null,
     undoUsed: getUndoUsed(game, userId),
     undoRemaining: getUndoRemaining(game, userId),
     undoLimit: UNDO_LIMIT_PER_USER,
@@ -1387,6 +1443,7 @@ export function makeMove(gameId, fromRow, fromCol, toRow, toCol) {
   const game = db.games.find((g) => g.id === gameId && g.userId === userId);
   if (!game) throw new Error("对局不存在或无权限");
   if ((game.status || "active") === "finished") throw new Error("该对局已结束");
+  clearAiThinkState(game);
 
   const boardBefore = cloneBoard(game.snapshots[game.snapshots.length - 1]);
   validateMoveOrThrow(boardBefore, fromRow, fromCol, toRow, toCol, game.turn);
@@ -1411,10 +1468,43 @@ export function makeMove(gameId, fromRow, fromCol, toRow, toCol) {
   const boardAfter = applyMove(boardBefore, fromRow, fromCol, toRow, toCol);
   game.snapshots.push(boardAfter);
   settleAfterMove(game, toPiece || "", rawMove.piece[0]);
-  maybePlayAiTurn(game);
+  scheduleAiThinkIfNeeded(game);
   game.updatedAt = new Date().toISOString();
   saveDb(db);
   return game;
+}
+
+export function runAiTurnIfReady(gameId) {
+  const { db, userId } = requireCurrentUser();
+  const game = db.games.find((g) => g.id === gameId && g.userId === userId);
+  if (!game) throw new Error("对局不存在或无权限");
+  if (game.mode !== "ai" || game.status !== "active") {
+    clearAiThinkState(game);
+    saveDb(db);
+    return { moved: false, aiThinking: false, aiThinkMsLeft: 0 };
+  }
+  if (game.turn !== game.aiSide) {
+    clearAiThinkState(game);
+    saveDb(db);
+    return { moved: false, aiThinking: false, aiThinkMsLeft: 0 };
+  }
+  if (!game.aiThinkDueAt) {
+    scheduleAiThinkIfNeeded(game);
+    game.updatedAt = new Date().toISOString();
+    saveDb(db);
+  }
+  const now = Date.now();
+  const dueAt = game.aiThinkDueAt ? new Date(game.aiThinkDueAt).getTime() : now;
+  const msLeft = Math.max(0, dueAt - now);
+  if (msLeft > 0) {
+    return { moved: false, aiThinking: true, aiThinkMsLeft: msLeft };
+  }
+
+  const moved = maybePlayAiTurn(game);
+  clearAiThinkState(game);
+  game.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return { moved, aiThinking: false, aiThinkMsLeft: 0 };
 }
 
 export function endGame(gameId, { keepRecord = true } = {}) {
@@ -1422,6 +1512,7 @@ export function endGame(gameId, { keepRecord = true } = {}) {
   const gameIndex = db.games.findIndex((g) => g.id === gameId && g.userId === userId);
   if (gameIndex < 0) throw new Error("对局不存在或无权限");
   const game = db.games[gameIndex];
+  clearAiThinkState(game);
   if (keepRecord) {
     game.status = "finished";
     if (game.winnerSide !== "r" && game.winnerSide !== "b") {
@@ -1467,6 +1558,8 @@ export function undoGameMove(gameId) {
   game.turn = keepMoveCount % 2 === 0 ? "r" : "b";
   game.status = "active";
   game.winnerSide = null;
+  clearAiThinkState(game);
+  scheduleAiThinkIfNeeded(game);
   bumpUndoUsed(game, userId);
   game.updatedAt = new Date().toISOString();
   saveDb(db);
