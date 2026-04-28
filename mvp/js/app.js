@@ -81,6 +81,7 @@ const battleState = {
   battleId: null,
   ply: 0,
   selected: null,
+  followLatest: true,
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
@@ -112,6 +113,7 @@ function renderSession() {
     battleState.battleId = null;
     battleState.ply = 0;
     battleState.selected = null;
+    battleState.followLatest = true;
     renderAll();
   });
 }
@@ -255,6 +257,7 @@ function renderBattleList() {
   if (!user) {
     battleSelect.innerHTML = `<option value="">请先登录</option>`;
     battleState.battleId = null;
+    battleState.followLatest = true;
     return;
   }
   let battles = [];
@@ -263,6 +266,7 @@ function renderBattleList() {
   } catch (err) {
     battleSelect.innerHTML = `<option value="">加载失败：${err.message}</option>`;
     battleState.battleId = null;
+    battleState.followLatest = true;
     return;
   }
   if (battles.length === 0) {
@@ -277,6 +281,7 @@ function renderBattleList() {
     battleState.battleId = battles[0].id;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
+    battleState.followLatest = true;
   }
   battleSelect.value = battleState.battleId;
 }
@@ -349,7 +354,8 @@ function renderBattleBoard() {
   try {
     const battle = getBattle(battleState.battleId);
     const role = getBattleRole(battleState.battleId);
-    const snap = getBattleSnapshot(battleState.battleId, battleState.ply);
+    const targetPly = battleState.followLatest ? Number.MAX_SAFE_INTEGER : battleState.ply;
+    const snap = getBattleSnapshot(battleState.battleId, targetPly);
     battleState.ply = snap.index;
 
     const myTurnText = snap.turn === role ? "（轮到你）" : "（等待对手）";
@@ -361,7 +367,7 @@ function renderBattleBoard() {
       role,
     )}\n状态：${battleStatusText(snap.status)}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${snap.index < snap.max ? "（回放模式）" : myTurnText}${winnerText}${assessText}`;
+    }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${assessText}`;
 
     battleBoardEl.innerHTML = "";
     for (let row = 0; row < 10; row += 1) {
@@ -462,6 +468,7 @@ function onBattleCellClick(row, col, code, snap, role) {
     makeBattleMove(battleState.battleId, fromRow, fromCol, row, col);
     battleState.selected = null;
     battleState.ply = Number.MAX_SAFE_INTEGER;
+    battleState.followLatest = true;
     renderBattleList();
     renderBattleBoard();
   } catch (err) {
@@ -587,7 +594,9 @@ function syncBattleIfNeeded() {
   if (!battleState.battleId) return;
   const user = getCurrentUser();
   if (!user) return;
-  // Preserve current interaction state; renderBattleBoard keeps selected piece highlight.
+  if (battleState.followLatest) {
+    battleState.ply = Number.MAX_SAFE_INTEGER;
+  }
   renderBattleList();
   renderBattleBoard();
 }
@@ -811,6 +820,7 @@ createBattleBtn.addEventListener("click", () => {
     battleState.battleId = battle.id;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
+    battleState.followLatest = true;
     renderAll();
   } catch (err) {
     alert(err.message);
@@ -824,6 +834,7 @@ joinBattleBtn.addEventListener("click", () => {
     battleState.battleId = battle.id;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
+    battleState.followLatest = true;
     renderAll();
   } catch (err) {
     alert(err.message);
@@ -834,30 +845,35 @@ battleSelect.addEventListener("change", () => {
   battleState.battleId = battleSelect.value || null;
   battleState.ply = Number.MAX_SAFE_INTEGER;
   battleState.selected = null;
+  battleState.followLatest = true;
   renderBattleBoard();
 });
 
 battleFirstPlyBtn.addEventListener("click", () => {
   battleState.ply = 0;
   battleState.selected = null;
+  battleState.followLatest = false;
   renderBattleBoard();
 });
 
 battlePrevPlyBtn.addEventListener("click", () => {
   battleState.ply = Math.max(0, battleState.ply - 1);
   battleState.selected = null;
+  battleState.followLatest = false;
   renderBattleBoard();
 });
 
 battleNextPlyBtn.addEventListener("click", () => {
   battleState.ply += 1;
   battleState.selected = null;
+  battleState.followLatest = false;
   renderBattleBoard();
 });
 
 battleLastPlyBtn.addEventListener("click", () => {
   battleState.ply = Number.MAX_SAFE_INTEGER;
   battleState.selected = null;
+  battleState.followLatest = true;
   renderBattleBoard();
 });
 
