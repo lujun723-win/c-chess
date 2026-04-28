@@ -97,6 +97,78 @@ const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
 let battleSyncTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
+const moveFxState = {
+  game: { id: null, index: 0 },
+  battle: { id: null, index: 0 },
+};
+
+function pointLeftPercent(col) {
+  return `${(col / 8) * 100}%`;
+}
+
+function pointTopPercent(row) {
+  return `${(row / 9) * 100}%`;
+}
+
+function createFxNode(className, row, col, text = "") {
+  const node = document.createElement("div");
+  node.className = className;
+  node.style.left = pointLeftPercent(col);
+  node.style.top = pointTopPercent(row);
+  if (text) node.textContent = text;
+  return node;
+}
+
+function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
+  if (!boardPointsEl || !move) return;
+  const [fromRow, fromCol] = move.from;
+  const [toRow, toCol] = move.to;
+  const ghost = createFxNode(
+    `move-ghost ${move.piece?.[0] === "r" ? "red" : "black"}`,
+    fromRow,
+    fromCol,
+    pieceLabel(move.piece || ""),
+  );
+  boardPointsEl.appendChild(ghost);
+  requestAnimationFrame(() => {
+    ghost.classList.add("moving");
+    ghost.style.left = pointLeftPercent(toCol);
+    ghost.style.top = pointTopPercent(toRow);
+  });
+  setTimeout(() => {
+    ghost.remove();
+  }, 280);
+
+  if (move.captured) {
+    const burst = createFxNode("capture-burst", toRow, toCol);
+    boardPointsEl.appendChild(burst);
+    setTimeout(() => burst.remove(), 360);
+  }
+
+  if (checkAlert) {
+    const flash = createFxNode("check-flash", toRow, toCol);
+    boardPointsEl.appendChild(flash);
+    setTimeout(() => flash.remove(), 420);
+  }
+}
+
+function maybeAnimateLatestMove(scope, ownerId, snap, boardPointsEl) {
+  const state = moveFxState[scope];
+  if (!state) return;
+  if (state.id !== ownerId) {
+    state.id = ownerId;
+    state.index = snap.index;
+    return;
+  }
+  if (snap.index <= state.index) {
+    state.index = snap.index;
+    return;
+  }
+  if (snap.index === snap.max && snap.latestMove) {
+    spawnMoveFx(boardPointsEl, snap.latestMove, { checkAlert: snap.inCheck });
+  }
+  state.index = snap.index;
+}
 
 function getOwnedFamily() {
   const user = getCurrentUser();
@@ -338,9 +410,10 @@ function renderBoard() {
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
     const undoLine = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
+    const checkLine = snap.inCheck ? `\n警告：${sideText(snap.checkedSide)}正在被将军。` : "";
     boardStatus.textContent = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${undoLine}${assessLine}`;
+    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${undoLine}${checkLine}${assessLine}`;
     boardEl.innerHTML = "";
     for (let row = 0; row < 10; row += 1) {
       for (let col = 0; col < 9; col += 1) {
@@ -348,16 +421,20 @@ function renderBoard() {
         const cell = document.createElement("button");
         cell.type = "button";
         cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
-        cell.style.left = `${(col / 8) * 100}%`;
-        cell.style.top = `${(row / 9) * 100}%`;
+        cell.style.left = pointLeftPercent(col);
+        cell.style.top = pointTopPercent(row);
         if (gameState.selected && gameState.selected[0] === row && gameState.selected[1] === col) {
           cell.classList.add("selected");
+        }
+        if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
+          cell.classList.add("checked-king");
         }
         cell.textContent = code ? pieceLabel(code) : "";
         cell.addEventListener("click", () => onBoardCellClick(row, col, code, snap));
         boardEl.appendChild(cell);
       }
     }
+    maybeAnimateLatestMove("game", game.id, snap, boardEl);
     firstPlyBtn.disabled = snap.index === 0;
     prevPlyBtn.disabled = snap.index === 0;
     nextPlyBtn.disabled = snap.index === snap.max;
@@ -398,11 +475,12 @@ function renderBattleBoard() {
       ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
       : "";
     const undoText = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
+    const checkText = snap.inCheck ? `\n警告：${sideText(snap.checkedSide)}正在被将军。` : "";
     battleStatus.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
       role,
     )}\n状态：${battleStatusText(snap.status)}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${undoText}${assessText}`;
+    }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${undoText}${checkText}${assessText}`;
 
     battleBoardEl.innerHTML = "";
     for (let row = 0; row < 10; row += 1) {
@@ -411,8 +489,8 @@ function renderBattleBoard() {
         const cell = document.createElement("button");
         cell.type = "button";
         cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
-        cell.style.left = `${(col / 8) * 100}%`;
-        cell.style.top = `${(row / 9) * 100}%`;
+        cell.style.left = pointLeftPercent(col);
+        cell.style.top = pointTopPercent(row);
         if (
           battleState.selected &&
           battleState.selected[0] === row &&
@@ -420,11 +498,15 @@ function renderBattleBoard() {
         ) {
           cell.classList.add("selected");
         }
+        if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
+          cell.classList.add("checked-king");
+        }
         cell.textContent = code ? pieceLabel(code) : "";
         cell.addEventListener("click", () => onBattleCellClick(row, col, code, snap, role));
         battleBoardEl.appendChild(cell);
       }
     }
+    maybeAnimateLatestMove("battle", battle.id, snap, battleBoardEl);
 
     battleFirstPlyBtn.disabled = snap.index === 0;
     battlePrevPlyBtn.disabled = snap.index === 0;

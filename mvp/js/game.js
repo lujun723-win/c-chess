@@ -1351,11 +1351,14 @@ export function getSnapshot(gameId, plyIndex) {
   const max = game.snapshots.length - 1;
   const index = Math.max(0, Math.min(plyIndex, max));
   const move = index > 0 ? game.moves[index - 1] : null;
+  const board = cloneBoard(game.snapshots[index]);
+  const turn = index === max ? game.turn : index % 2 === 0 ? "r" : "b";
+  const inCheck = isInCheck(board, turn);
   return {
-    board: cloneBoard(game.snapshots[index]),
+    board,
     index,
     max,
-    turn: index === max ? game.turn : index % 2 === 0 ? "r" : "b",
+    turn,
     mode: game.mode || "practice",
     aiSide: game.aiSide || null,
     aiLevel: game.aiLevel || null,
@@ -1364,6 +1367,16 @@ export function getSnapshot(gameId, plyIndex) {
     undoUsed: getUndoUsed(game, userId),
     undoRemaining: getUndoRemaining(game, userId),
     undoLimit: UNDO_LIMIT_PER_USER,
+    inCheck,
+    checkedSide: inCheck ? turn : null,
+    latestMove: move
+      ? {
+          from: [...move.from],
+          to: [...move.to],
+          piece: move.piece,
+          captured: move.captured || "",
+        }
+      : null,
     latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
@@ -1563,16 +1576,29 @@ export function getBattleSnapshot(battleId, plyIndex) {
   const max = battle.snapshots.length - 1;
   const index = Math.max(0, Math.min(plyIndex, max));
   const move = index > 0 ? battle.moves[index - 1] : null;
+  const board = cloneBoard(battle.snapshots[index]);
+  const turn = index === max ? battle.turn : index % 2 === 0 ? "r" : "b";
+  const inCheck = isInCheck(board, turn);
   return {
-    board: cloneBoard(battle.snapshots[index]),
+    board,
     index,
     max,
-    turn: index === max ? battle.turn : index % 2 === 0 ? "r" : "b",
+    turn,
     status: battle.status,
     winnerSide: battle.winnerSide,
     undoUsed: getUndoUsed(battle, userId),
     undoRemaining: getUndoRemaining(battle, userId),
     undoLimit: UNDO_LIMIT_PER_USER,
+    inCheck,
+    checkedSide: inCheck ? turn : null,
+    latestMove: move
+      ? {
+          from: [...move.from],
+          to: [...move.to],
+          piece: move.piece,
+          captured: move.captured || "",
+        }
+      : null,
     latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
