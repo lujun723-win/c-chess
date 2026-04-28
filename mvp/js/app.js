@@ -102,8 +102,8 @@ const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
 let sfxUnlocked = false;
 const moveFxState = {
-  game: { id: null, index: 0 },
-  battle: { id: null, index: 0 },
+  game: { id: null, index: 0, checkToken: "" },
+  battle: { id: null, index: 0, checkToken: "" },
 };
 
 function pointLeftPercent(col) {
@@ -198,7 +198,7 @@ function playCheckSfx(delayMs = 0) {
 }
 
 function showCheckCallout(boardPointsEl) {
-  const host = boardPointsEl?.parentElement;
+  const host = boardPointsEl?.closest(".xiangqi-board");
   if (!host) return;
   const old = host.querySelector(".check-callout");
   if (old) old.remove();
@@ -279,17 +279,33 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
 function maybeAnimateLatestMove(scope, ownerId, snap, boardPointsEl) {
   const state = moveFxState[scope];
   if (!state) return;
+  const checkToken = snap.inCheck ? `${ownerId}:${snap.index}:${snap.checkedSide}` : "";
   if (state.id !== ownerId) {
     state.id = ownerId;
     state.index = snap.index;
+    state.checkToken = checkToken;
+    if (snap.inCheck) {
+      showCheckCallout(boardPointsEl);
+      playCheckSfx(50);
+    }
     return;
   }
   if (snap.index <= state.index) {
     state.index = snap.index;
+    if (snap.inCheck && state.checkToken !== checkToken) {
+      showCheckCallout(boardPointsEl);
+      playCheckSfx(50);
+      state.checkToken = checkToken;
+    }
     return;
   }
   if (snap.index === snap.max && snap.latestMove) {
+    if (snap.inCheck) state.checkToken = checkToken;
     spawnMoveFx(boardPointsEl, snap.latestMove, { checkAlert: snap.inCheck });
+  } else if (snap.inCheck && state.checkToken !== checkToken) {
+    showCheckCallout(boardPointsEl);
+    playCheckSfx(50);
+    state.checkToken = checkToken;
   }
   state.index = snap.index;
 }
