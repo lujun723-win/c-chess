@@ -359,13 +359,13 @@ hr {
 .check-callout {
   position: absolute;
   left: 50%;
-  top: 9.5%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   color: #b42318;
-  font-family: "STKaiti", "KaiTi", "Songti SC", serif;
-  font-size: clamp(30px, 8vw, 44px);
+  font-family: "STXingkai", "Xingkai SC", "HanziPen SC", "KaiTi", serif;
+  font-size: clamp(44px, 11vw, 64px);
   line-height: 1;
-  letter-spacing: 4px;
+  letter-spacing: 6px;
   -webkit-text-stroke: 0.8px rgba(94, 18, 12, 0.45);
   text-shadow:
     0 1px 0 rgba(255, 246, 230, 0.92),
@@ -442,19 +442,19 @@ hr {
 @keyframes check-callout {
   0% {
     opacity: 0;
-    transform: translateX(-50%) scale(0.72) translateY(-4px);
+    transform: translate(-50%, -50%) scale(0.72) translateY(-4px);
   }
   12% {
     opacity: 1;
-    transform: translateX(-50%) scale(1.06) translateY(0);
+    transform: translate(-50%, -50%) scale(1.06) translateY(0);
   }
   70% {
     opacity: 0.96;
-    transform: translateX(-50%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) scale(1) translateY(2px);
+    transform: translate(-50%, -50%) scale(1) translateY(2px);
   }
 }
 
