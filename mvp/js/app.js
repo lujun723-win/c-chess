@@ -119,6 +119,24 @@ function createFxNode(className, row, col, text = "") {
   return node;
 }
 
+function spawnCaptureParticles(boardPointsEl, row, col, count = 14) {
+  for (let i = 0; i < count; i += 1) {
+    const p = createFxNode("capture-particle", row, col);
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 22 + Math.random() * 34;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    const rot = -110 + Math.random() * 220;
+    const delay = Math.random() * 70;
+    p.style.setProperty("--dx", `${dx.toFixed(1)}px`);
+    p.style.setProperty("--dy", `${dy.toFixed(1)}px`);
+    p.style.setProperty("--rot", `${rot.toFixed(1)}deg`);
+    p.style.animationDelay = `${delay.toFixed(0)}ms`;
+    boardPointsEl.appendChild(p);
+    setTimeout(() => p.remove(), 640);
+  }
+}
+
 function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
   if (!boardPointsEl || !move) return;
   const [fromRow, fromCol] = move.from;
@@ -141,8 +159,12 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
 
   if (move.captured) {
     const burst = createFxNode("capture-burst", toRow, toCol);
+    const shock = createFxNode("capture-shockwave", toRow, toCol);
     boardPointsEl.appendChild(burst);
-    setTimeout(() => burst.remove(), 360);
+    boardPointsEl.appendChild(shock);
+    spawnCaptureParticles(boardPointsEl, toRow, toCol, 16);
+    setTimeout(() => burst.remove(), 440);
+    setTimeout(() => shock.remove(), 520);
   }
 
   if (checkAlert) {
