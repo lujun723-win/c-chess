@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,7 @@ const DB_PATH = path.join(DATA_DIR, "db.json");
 
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || "0.0.0.0";
+const MDNS_ALIAS = (process.env.MDNS_ALIAS || "chess.local").trim().toLowerCase();
 
 function defaultDb() {
   return {
@@ -140,6 +142,10 @@ function buildAccessInfo(req) {
     add("主机名", `http://${hostname}:${PORT}/mvp/`, "同一局域网可尝试直接访问");
     add("mDNS 主机名", `http://${hostname}.local:${PORT}/mvp/`, "iPad/iPhone 一般优先尝试这个");
   }
+  if (MDNS_ALIAS) {
+    const aliasHost = MDNS_ALIAS.endsWith(".local") ? MDNS_ALIAS : `${MDNS_ALIAS}.local`;
+    add("自定义短域名", `http://${aliasHost}:${PORT}/mvp/`, "推荐收藏这个入口");
+  }
   for (const ip of lanIps) {
     add("局域网 IP", `http://${ip}:${PORT}/mvp/`, "手机/平板通用");
   }
@@ -235,6 +241,19 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+function startMdnsAliasPublisher() {
+  const aliasHost = MDNS_ALIAS.endsWith(".local") ? MDNS_ALIAS : `${MDNS_ALIAS}.local`;
+  if (!aliasHost || aliasHost === ".local") return null;
+  const lanIp = collectLanIPv4()[0];
+  if (!lanIp) return null;
+  const child = spawn("avahi-publish", ["-a", "-R", aliasHost, lanIp], {
+    stdio: "ignore",
+    detached: false,
+  });
+  child.on("error", () => {});
+  return child;
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
@@ -301,6 +320,30 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
+  const mdnsProc = startMdnsAliasPublisher();
+  if (mdnsProc) {
+    const stop = () => {
+      try {
+        mdnsProc.kill("SIGTERM");
+      } catch (_err) {
+        // ignore
+      }
+    };
+    process.on("exit", stop);
+    process.on("SIGINT", () => {
+      stop();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      stop();
+      process.exit(0);
+    });
+  }
   // eslint-disable-next-line no-console
   console.log(`c-chess server running at http://${HOST}:${PORT}`);
+  if (MDNS_ALIAS) {
+    const aliasHost = MDNS_ALIAS.endsWith(".local") ? MDNS_ALIAS : `${MDNS_ALIAS}.local`;
+    // eslint-disable-next-line no-console
+    console.log(`mDNS alias preferred: http://${aliasHost}:${PORT}/mvp/`);
+  }
 });

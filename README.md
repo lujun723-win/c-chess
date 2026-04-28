@@ -16,3 +16,5 @@ npm start
 
 - `http://localhost:3001/lan` 查看当前可用的局域网地址清单（含 `hostname.local`）
 - `http://localhost:3001/go` 自动跳转到优先地址（mDNS/局域网 IP）
+- 默认会发布短域名：`http://chess.local:3001/mvp/`
+- 可自定义：`MDNS_ALIAS=yourname.local npm start`
