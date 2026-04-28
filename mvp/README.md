@@ -59,8 +59,15 @@
 - `mvp/vendor/xqwlight/*` 来自 `xqbase/xqwlight`（GPL-2.0），保留原许可证文件。
 
 ## 运行方式
-- 直接用浏览器打开 `mvp/index.html`
-- 或在 VS Code 用 Live Server 打开
+- 推荐：在仓库根目录启动后端化服务 `npm start`，然后访问 `http://localhost:3001`
+- 兼容：也可直接打开 `mvp/index.html`（此时仅本机缓存，不走共享后端）
+
+## 后端化说明（V1）
+- 新增零依赖 Node 服务：`server/index.js`
+- 共享数据存储：`server/data/db.json`（运行时自动创建）
+- 前端数据层：`mvp/js/store.js` 已切换为“远端优先、本地回退”
+- 登录会话仍保留在本地浏览器，避免家庭成员互相挤掉登录状态
+- 首次连接到空后端时，会自动把旧本地数据迁移上去（一次性）
 
 ## 回归测试
 - 命令行（Node 16+）：在仓库根目录运行 `npm run test:regression`
