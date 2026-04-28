@@ -136,6 +136,12 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     const pathname = url.pathname;
 
+    if (req.method === "GET" && pathname === "/") {
+      res.writeHead(302, { location: "/mvp/" });
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/health") {
       sendJson(res, 200, { ok: true, time: new Date().toISOString() });
       return;
