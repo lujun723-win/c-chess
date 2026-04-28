@@ -388,6 +388,86 @@ function pieceValue(piece) {
   return values[type] || 0;
 }
 
+function countSideByType(board, side) {
+  const counts = { K: 0, R: 0, N: 0, C: 0, B: 0, A: 0, P: 0 };
+  for (let r = 0; r < 10; r += 1) {
+    for (let c = 0; c < 9; c += 1) {
+      const p = board[r][c];
+      if (!p || p[0] !== side) continue;
+      counts[p[1]] = (counts[p[1]] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function countBoardPieces(board) {
+  let n = 0;
+  for (let r = 0; r < 10; r += 1) {
+    for (let c = 0; c < 9; c += 1) {
+      if (board[r][c]) n += 1;
+    }
+  }
+  return n;
+}
+
+function contextualPieceValue(
+  board,
+  piece,
+  row,
+  col,
+  sideCounts = null,
+  enemyCounts = null,
+  totalPieces = null,
+) {
+  if (!piece) return 0;
+  const side = piece[0];
+  const enemy = oppositeSide(side);
+  const me = sideCounts || countSideByType(board, side);
+  const opp = enemyCounts || countSideByType(board, enemy);
+  const pieces = Number.isFinite(totalPieces) ? totalPieces : countBoardPieces(board);
+  const type = piece[1];
+  let value = pieceValue(piece);
+
+  if (type === "P") {
+    const crossed = side === "r" ? row <= 4 : row >= 5;
+    const adv = side === "r" ? 9 - row : row;
+    value += crossed ? 0.85 : 0.05;
+    if (crossed) value += Math.max(0, (adv - 5) * 0.1);
+    return value;
+  }
+
+  if (type === "R") {
+    if (pieces <= 14) value += 0.35;
+    return value;
+  }
+
+  if (type === "N") {
+    if (pieces <= 14) value += 0.25;
+    return value;
+  }
+
+  if (type === "C") {
+    if (pieces >= 24) value += 0.2;
+    if (pieces <= 14) value -= 0.25;
+    if (me.R === 0 && opp.R > 0) value += 0.35;
+    if (me.C <= 1 && opp.R >= 2) value += 0.25;
+    if ((me.A + me.B) === 0) value -= 0.2;
+    return value;
+  }
+
+  if (type === "A") {
+    if (opp.R >= 2) value += 0.2;
+    return value;
+  }
+
+  if (type === "B") {
+    if (opp.C >= 2) value += 0.2;
+    return value;
+  }
+
+  return value;
+}
+
 const AI_LEVELS = {
   beginner: {
     id: "beginner",
@@ -414,13 +494,15 @@ const AI_LEVELS = {
     topPool: 1,
   },
 };
-const ASSESSMENT_ENGINE_VERSION = "xqwlight-v2";
+const ASSESSMENT_ENGINE_VERSION = "xqwlight-v3";
 const RISK_MATERIAL_LOSS = "落点净亏风险";
+const RISK_THREE_PLY = "三步预演存在战术亏损";
 
 export function getAssessmentRiskLabels() {
   return {
     materialLoss: RISK_MATERIAL_LOSS,
     checkThreat: "下一步可能被将",
+    threePlyLoss: RISK_THREE_PLY,
   };
 }
 
@@ -532,22 +614,22 @@ function xqwlightFindBestMove(board, side, levelId, forAssessment = false) {
 
 function evaluateBoardForSide(board, side) {
   const enemy = oppositeSide(side);
+  const totalPieces = countBoardPieces(board);
+  const rCounts = countSideByType(board, "r");
+  const bCounts = countSideByType(board, "b");
   let score = 0;
   for (let r = 0; r < 10; r += 1) {
     for (let c = 0; c < 9; c += 1) {
       const p = board[r][c];
       if (!p) continue;
-      let v = pieceValue(p);
-      // Encourage advanced pawns slightly.
-      if (p[1] === "P") {
-        const crossed = p[0] === "r" ? r <= 4 : r >= 5;
-        if (crossed) v += 0.3;
-      }
+      const sideCounts = p[0] === "r" ? rCounts : bCounts;
+      const enemyCounts = p[0] === "r" ? bCounts : rCounts;
+      const v = contextualPieceValue(board, p, r, c, sideCounts, enemyCounts, totalPieces);
       score += p[0] === side ? v : -v;
     }
   }
-  if (isInCheck(board, side)) score -= 0.8;
-  if (isInCheck(board, enemy)) score += 0.8;
+  if (isInCheck(board, side)) score -= 1.2;
+  if (isInCheck(board, enemy)) score += 1.2;
   return score;
 }
 
@@ -667,19 +749,9 @@ function classifyGap(gap) {
   return { key: "mistake", label: "失误" };
 }
 
-function countPieces(board) {
-  let n = 0;
-  for (let r = 0; r < 10; r += 1) {
-    for (let c = 0; c < 9; c += 1) {
-      if (board[r][c]) n += 1;
-    }
-  }
-  return n;
-}
-
 function shouldDownrankOpeningMistake(boardBefore, boardAfter, rawMove, side) {
   if (!rawMove || rawMove.captured) return false;
-  if (countPieces(boardBefore) < 30) return false;
+  if (countBoardPieces(boardBefore) < 30) return false;
   if (isInCheck(boardBefore, side)) return false;
   if (isInCheck(boardAfter, side)) return false;
   // Keep opening labels conservative when no tactical events happened yet.
@@ -729,7 +801,12 @@ function bestRecaptureValue(boardAfterEnemyCapture, row, col, side) {
   if (!recaptures.length) return 0;
   let best = 0;
   for (const mv of recaptures) {
-    const gain = pieceValue(mv.captured || "");
+    const gain = contextualPieceValue(
+      boardAfterEnemyCapture,
+      mv.captured || "",
+      mv.to[0],
+      mv.to[1],
+    );
     if (gain > best) best = gain;
   }
   return best;
@@ -741,7 +818,7 @@ function estimateImmediateNetLoss(boardAfter, row, col, side, gainedMaterial = 0
   const enemy = oppositeSide(side);
   const enemyCaptures = legalCapturesToSquare(boardAfter, row, col, enemy);
   if (!enemyCaptures.length) return 0;
-  const selfValue = pieceValue(target);
+  const selfValue = contextualPieceValue(boardAfter, target, row, col);
   let worstLoss = 0;
   for (const cap of enemyCaptures) {
     const boardAfterEnemyCapture = applyMove(
@@ -756,6 +833,93 @@ function estimateImmediateNetLoss(boardAfter, row, col, side, gainedMaterial = 0
     if (netLoss > worstLoss) worstLoss = netLoss;
   }
   return worstLoss;
+}
+
+function pickBestForecastMove(board, side) {
+  const external = xqwlightFindBestMove(board, side, "beginner", true);
+  if (external && isLegalMove(board, external, side)) return external;
+  const ranked = rankMoves(board, side, 2);
+  return ranked[0]?.move || null;
+}
+
+function moveNotationSafe(move, boardBefore) {
+  if (!move) return "";
+  try {
+    return toChineseNotation(move, boardBefore);
+  } catch (_err) {
+    return "";
+  }
+}
+
+function forecastThreePly(boardBefore, rawMove, side) {
+  const boardAfterMyMove = applyMove(
+    boardBefore,
+    rawMove.from[0],
+    rawMove.from[1],
+    rawMove.to[0],
+    rawMove.to[1],
+  );
+  const enemy = oppositeSide(side);
+  const enemyMove1 = pickBestForecastMove(boardAfterMyMove, enemy);
+  if (!enemyMove1) {
+    return {
+      line: [],
+      netSwing: 0,
+      movedPieceCaptured: false,
+      capturePly: 0,
+    };
+  }
+  const boardAfterEnemy1 = applyMove(
+    boardAfterMyMove,
+    enemyMove1.from[0],
+    enemyMove1.from[1],
+    enemyMove1.to[0],
+    enemyMove1.to[1],
+  );
+  const myMove2 = pickBestForecastMove(boardAfterEnemy1, side);
+  const boardAfterMy2 = myMove2
+    ? applyMove(boardAfterEnemy1, myMove2.from[0], myMove2.from[1], myMove2.to[0], myMove2.to[1])
+    : boardAfterEnemy1;
+  const enemyMove3 = pickBestForecastMove(boardAfterMy2, enemy);
+  const boardAfterEnemy3 = enemyMove3
+    ? applyMove(
+        boardAfterMy2,
+        enemyMove3.from[0],
+        enemyMove3.from[1],
+        enemyMove3.to[0],
+        enemyMove3.to[1],
+      )
+    : boardAfterMy2;
+
+  const movedPieceCapturedPly1 =
+    enemyMove1.to[0] === rawMove.to[0] &&
+    enemyMove1.to[1] === rawMove.to[1] &&
+    enemyMove1.captured === rawMove.piece;
+  const movedPieceCapturedPly3 = Boolean(
+    !movedPieceCapturedPly1 &&
+      myMove2 &&
+      enemyMove3 &&
+      enemyMove3.to[0] === myMove2.to[0] &&
+      enemyMove3.to[1] === myMove2.to[1] &&
+      enemyMove3.captured === myMove2.piece,
+  );
+  const movedPieceCaptured = movedPieceCapturedPly1 || movedPieceCapturedPly3;
+  const capturePly = movedPieceCapturedPly1 ? 1 : movedPieceCapturedPly3 ? 3 : 0;
+  const beforeEval = evaluateBoardForSide(boardBefore, side);
+  const afterEval = evaluateBoardForSide(boardAfterEnemy3, side);
+  const netSwing = Number((afterEval - beforeEval).toFixed(2));
+  const line = [
+    moveNotationSafe(enemyMove1, boardAfterMyMove),
+    moveNotationSafe(myMove2, boardAfterEnemy1),
+    moveNotationSafe(enemyMove3, boardAfterMy2),
+  ].filter(Boolean);
+
+  return {
+    line,
+    netSwing,
+    movedPieceCaptured,
+    capturePly,
+  };
 }
 
 function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, externalBest = null) {
@@ -793,18 +957,36 @@ function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, ext
   );
   const enemy = oppositeSide(side);
   const risks = [];
+  const gainedMaterial = contextualPieceValue(
+    boardBefore,
+    rawMove.captured || "",
+    rawMove.to[0],
+    rawMove.to[1],
+  );
   const immediateNetLoss = estimateImmediateNetLoss(
     boardAfter,
     rawMove.to[0],
     rawMove.to[1],
     side,
-    pieceValue(rawMove.captured || ""),
+    gainedMaterial,
   );
   if (immediateNetLoss >= 1) {
     risks.push(RISK_MATERIAL_LOSS);
   }
   if (canGiveCheckInOne(boardAfter, enemy, side)) {
     risks.push("下一步可能被将");
+  }
+  const threePly = forecastThreePly(boardBefore, rawMove, side);
+  if (threePly.movedPieceCaptured || threePly.netSwing <= -1.8) {
+    risks.push(RISK_THREE_PLY);
+  }
+  if (
+    quality.key === "best" &&
+    threePly.movedPieceCaptured &&
+    threePly.netSwing <= -0.5 &&
+    !(rawMove.captured && rawMove.captured[1] === "K")
+  ) {
+    quality = { key: "inaccuracy", label: "有更优" };
   }
   if (quality.key === "mistake" && shouldDownrankOpeningMistake(boardBefore, boardAfter, rawMove, side)) {
     quality = { key: "inaccuracy", label: "有更优" };
@@ -817,6 +999,7 @@ function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, ext
     evalDepth,
     risks,
     immediateNetLoss: Number(immediateNetLoss.toFixed(2)),
+    threePly,
     bestMoveNotation: bestMove ? toChineseNotation(bestMove, boardBefore) : "",
     engineVersion: ASSESSMENT_ENGINE_VERSION,
     engine: hasExternalBest ? "xqwlight+fallback" : "fallback",
@@ -1040,6 +1223,7 @@ export function analyzeGame(gameId) {
     if (Array.isArray(move.assessment?.risks)) {
       if (move.assessment.risks.includes(RISK_MATERIAL_LOSS)) tags.push("送子风险");
       if (move.assessment.risks.includes("落点可能被吃")) tags.push("送子风险");
+      if (move.assessment.risks.includes(RISK_THREE_PLY)) tags.push("送子风险");
       if (move.assessment.risks.includes("下一步可能被将")) tags.push("被将风险");
     }
 

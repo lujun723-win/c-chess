@@ -241,6 +241,19 @@ function formatAssessment(assessment, latestMoveNotation = "") {
   const riskText = assessment.risks?.length ? assessment.risks.join("、") : "暂无";
   const moveText = latestMoveNotation || "无";
   const bestText = assessment.bestMoveNotation || "无";
+  const threePlyText = assessment.threePly
+    ? `\n三步预演：${
+        assessment.threePly.line?.length ? assessment.threePly.line.join(" -> ") : "无有效主线"
+      }\n三步局势变化：${
+        assessment.threePly.netSwing > 0
+          ? `对你有利 +${assessment.threePly.netSwing.toFixed(2)}`
+          : `对你不利 ${assessment.threePly.netSwing.toFixed(2)}`
+      }${
+        assessment.threePly.movedPieceCaptured
+          ? `\n预演提示：该子在第 ${assessment.threePly.capturePly} 手可能被直接吃掉。`
+          : ""
+      }`
+    : "";
   const compareText =
     latestMoveNotation && assessment.bestMoveNotation
       ? latestMoveNotation === assessment.bestMoveNotation
@@ -249,7 +262,7 @@ function formatAssessment(assessment, latestMoveNotation = "") {
       : "对比：当前缺少可比对的完整信息。";
   return `最近一步：${moveText}\n质量：${assessment.qualityLabel}\n差值解读：${describeScoreGap(
     assessment.scoreGap,
-  )}\n风险：${riskText}\n参考最优：${bestText}\n${compareText}`;
+  )}\n风险：${riskText}\n参考最优：${bestText}${threePlyText}\n${compareText}`;
 }
 
 function formatAssessmentInline(assessment) {

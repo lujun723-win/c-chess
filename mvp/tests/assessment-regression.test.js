@@ -83,6 +83,22 @@ const cases = [
     },
   },
   {
+    name: "三步预演应识别轻易送子",
+    run() {
+      const board = createBoardFromPieces([
+        { row: 0, col: 4, code: "bK" },
+        { row: 2, col: 4, code: "bR" },
+        { row: 5, col: 4, code: "rN" },
+        { row: 7, col: 4, code: "rR" },
+        { row: 9, col: 4, code: "rK" },
+      ]);
+      const move = buildRawMove(board, 2, 4, 5, 4);
+      const assessment = assessMoveForRegression(board, move, { side: "b", evalDepth: 2 });
+      assert.ok(assessment.threePly?.movedPieceCaptured);
+      assert.ok(assessment.risks.includes(riskLabels.threePlyLoss));
+    },
+  },
+  {
     name: "同线同类子记谱应使用前后消歧",
     run() {
       const board = createBoardFromPieces([
