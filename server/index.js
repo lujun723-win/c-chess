@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -106,6 +107,109 @@ function readBody(req) {
   });
 }
 
+function collectLanIPv4() {
+  const nets = os.networkInterfaces();
+  const ips = [];
+  const isPrivateLan = (ip) =>
+    ip.startsWith("10.") ||
+    ip.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip);
+  for (const values of Object.values(nets)) {
+    for (const item of values || []) {
+      if (!item || item.internal) continue;
+      if (item.family !== "IPv4") continue;
+      if (!isPrivateLan(item.address)) continue;
+      ips.push(item.address);
+    }
+  }
+  return [...new Set(ips)];
+}
+
+function buildAccessInfo(req) {
+  const hostHeader = (req.headers.host || "").split(":")[0];
+  const hostname = os.hostname();
+  const lanIps = collectLanIPv4();
+  const candidates = [];
+  const add = (label, url, note = "") => {
+    candidates.push({ label, url, note });
+  };
+
+  add("当前设备（本机）", `http://localhost:${PORT}/mvp/`);
+  add("当前设备（回环）", `http://127.0.0.1:${PORT}/mvp/`);
+  if (hostname) {
+    add("主机名", `http://${hostname}:${PORT}/mvp/`, "同一局域网可尝试直接访问");
+    add("mDNS 主机名", `http://${hostname}.local:${PORT}/mvp/`, "iPad/iPhone 一般优先尝试这个");
+  }
+  for (const ip of lanIps) {
+    add("局域网 IP", `http://${ip}:${PORT}/mvp/`, "手机/平板通用");
+  }
+  if (hostHeader && hostHeader !== "localhost" && hostHeader !== "127.0.0.1") {
+    add("当前访问地址", `http://${hostHeader}:${PORT}/mvp/`, "你现在就是从这个地址访问");
+  }
+  const dedup = [];
+  const seen = new Set();
+  for (const item of candidates) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    dedup.push(item);
+  }
+
+  return {
+    port: PORT,
+    hostname,
+    hostHeader: hostHeader || null,
+    lanIps,
+    links: dedup,
+  };
+}
+
+function renderLanPage(info) {
+  const list = info.links
+    .map(
+      (x) =>
+        `<li><a href="${x.url}" target="_blank" rel="noreferrer">${x.url}</a><div class="meta">${x.label}${
+          x.note ? ` · ${x.note}` : ""
+        }</div></li>`,
+    )
+    .join("");
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>局域网访问入口</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #f3f6f5; color: #1d2a24; }
+      .wrap { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+      .card { background: #fff; border: 1px solid #d9e0dc; border-radius: 10px; padding: 16px; }
+      h1 { margin: 0 0 8px; font-size: 22px; }
+      p { margin: 0 0 12px; color: #4f5f57; }
+      ul { margin: 0; padding-left: 20px; }
+      li { margin: 10px 0; line-height: 1.45; }
+      a { color: #116149; font-weight: 600; word-break: break-all; }
+      .meta { font-size: 13px; color: #65746d; }
+      .tips { margin-top: 14px; font-size: 13px; color: #65746d; }
+      .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+      button { border: 1px solid #d9e0dc; background: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>局域网访问入口</h1>
+        <p>DHCP 变更后 IP 会变，这个页面会实时显示当前可用地址。手机/iPad 打开任意一个即可。</p>
+        <ul>${list}</ul>
+        <div class="btns">
+          <button onclick="location.reload()">刷新地址</button>
+          <button onclick="window.location.href='/mvp/'">打开主应用</button>
+        </div>
+        <div class="tips">建议收藏本页：<code>/lan</code>。当 IP 变化时，先打开本页再跳转。</div>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
 async function serveStatic(req, res, pathname) {
   let relative = pathname === "/" ? "/mvp/index.html" : pathname;
   if (relative.endsWith("/")) relative += "index.html";
@@ -142,8 +246,31 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/lan") {
+      const info = buildAccessInfo(req);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      res.end(renderLanPage(info));
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/go") {
+      const info = buildAccessInfo(req);
+      const preferred =
+        info.links.find((x) => x.label === "mDNS 主机名") ||
+        info.links.find((x) => x.label === "局域网 IP") ||
+        info.links.find((x) => x.label === "主机名");
+      res.writeHead(302, { location: preferred ? preferred.url : "/mvp/" });
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/health") {
       sendJson(res, 200, { ok: true, time: new Date().toISOString() });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/access") {
+      sendJson(res, 200, buildAccessInfo(req));
       return;
     }
 
