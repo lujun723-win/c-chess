@@ -71,6 +71,17 @@ body {
   gap: 8px;
 }
 
+.mini-status {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+}
+
 input,
 select,
 button {

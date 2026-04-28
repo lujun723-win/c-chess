@@ -48,6 +48,8 @@ const gameModeSelect = document.getElementById("game-mode");
 const aiSideSelect = document.getElementById("ai-side");
 const aiLevelSelect = document.getElementById("ai-level");
 const createGameBtn = document.getElementById("create-game-btn");
+const sfxTestBtn = document.getElementById("sfx-test-btn");
+const sfxStatus = document.getElementById("sfx-status");
 const undoGameBtn = document.getElementById("undo-game-btn");
 const endGameBtn = document.getElementById("end-game-btn");
 const gameSelect = document.getElementById("game-select");
@@ -149,6 +151,18 @@ function sfxDestination(ctx) {
   return sfxMasterGain || ctx.destination;
 }
 
+function refreshSfxStatus() {
+  if (!sfxStatus) return;
+  const ctx = sfxAudioCtx;
+  if (!ctx) {
+    sfxStatus.textContent = "音效状态：未初始化";
+    return;
+  }
+  const stateText =
+    ctx.state === "running" ? "运行中" : ctx.state === "suspended" ? "被挂起" : ctx.state;
+  sfxStatus.textContent = `音效状态：${sfxUnlocked ? "已解锁" : "未解锁"} / ${stateText}`;
+}
+
 function unlockSfxFromGesture({ preview = false } = {}) {
   const ctx = ensureSfxContext();
   if (!ctx) return;
@@ -160,6 +174,12 @@ function unlockSfxFromGesture({ preview = false } = {}) {
     const t = ctx.currentTime + 0.01;
     // Warm-up tone to satisfy iOS audio activation chain.
     playSine(ctx, t, 440, 0.02, preview ? 0.028 : 0.00012);
+  }
+  refreshSfxStatus();
+  if (preview) {
+    playMoveSfx(80);
+    playCaptureSfx(360);
+    playCheckSfx(760);
   }
 }
 
@@ -203,6 +223,7 @@ function playNoiseBurst(ctx, when, duration = 0.16, gain = 0.05) {
 function playMoveSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
+  refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
   playSine(ctx, t, 460, 0.07, 0.1);
   playSine(ctx, t + 0.025, 315, 0.1, 0.085);
@@ -211,6 +232,7 @@ function playMoveSfx(delayMs = 0) {
 function playCaptureSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
+  refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
   playSine(ctx, t, 240, 0.11, 0.14);
   playSine(ctx, t + 0.03, 170, 0.14, 0.12);
@@ -220,6 +242,7 @@ function playCaptureSfx(delayMs = 0) {
 function playCheckSfx(delayMs = 0) {
   const ctx = ensureSfxContext();
   if (!ctx || !sfxUnlocked) return;
+  refreshSfxStatus();
   const t = ctx.currentTime + Math.max(0, delayMs) / 1000;
   playSine(ctx, t, 560, 0.14, 0.1);
   playSine(ctx, t + 0.11, 760, 0.17, 0.11);
@@ -1175,6 +1198,10 @@ addTagBtn.addEventListener("click", () => {
   }
 });
 
+sfxTestBtn.addEventListener("click", () => {
+  unlockSfxFromGesture({ preview: true });
+});
+
 createBattleBtn.addEventListener("click", () => {
   try {
     const battle = createBattle(battleNameInput.value);
@@ -1304,9 +1331,11 @@ window.addEventListener("pageshow", () => {
   if (sfxAudioCtx && sfxAudioCtx.state === "suspended") {
     sfxAudioCtx.resume().catch(() => {});
   }
+  refreshSfxStatus();
 });
 
 setupGameModeControls();
 renderAll();
 restartBattleAutoSyncLoop();
 restartBattleRealtimeChannel();
+refreshSfxStatus();
