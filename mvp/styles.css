@@ -498,6 +498,7 @@ hr {
   top: 92px;
   display: grid;
   gap: 10px;
+  align-self: start;
 }
 
 .xiangqi-board-frame {
@@ -993,10 +994,6 @@ hr {
     grid-template-columns: 1fr;
   }
 
-  .board-column {
-    position: static;
-  }
-
   .row {
     grid-template-columns: 1fr;
   }
@@ -1016,5 +1013,11 @@ hr {
 
   .file-label {
     font-size: 11px;
+  }
+}
+
+@media (max-width: 700px) {
+  .board-column {
+    position: static;
   }
 }
