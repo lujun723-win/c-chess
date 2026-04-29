@@ -183,7 +183,7 @@
           </div>
         </section>
 
-        <section class="page-view" id="game-card" data-view="game-card">
+        <section class="page-view board-page" id="game-card" data-view="game-card">
           <div class="card">
             <div class="page-head">
               <div>
@@ -358,24 +358,113 @@
                 <select id="review-game-select"></select>
                 <button id="analyze-game-btn" type="button">加载并生成复盘分析</button>
               </section>
-              <div class="row">
-                <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
-                <select id="tag-type">
-                  <option value="漏算">漏算</option>
-                  <option value="冒进">冒进</option>
-                  <option value="忽略将军">忽略将军</option>
-                  <option value="调子过多">调子过多</option>
-                  <option value="好棋">好棋</option>
-                </select>
+              <div class="review-surface">
+                <aside class="review-board-pane">
+                  <div class="review-board-wrap">
+                    <div class="xiangqi-board review-board" aria-label="复盘棋盘（只读）">
+                      <div class="file-label file-label-top">
+                        <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
+                      </div>
+                      <div class="board-area">
+                        <svg class="board-lines" viewBox="0 0 400 444" aria-hidden="true">
+                          <defs>
+                            <g id="star-full-rv">
+                              <path d="M -14 -6 H -6 M -6 -14 V -6 M 6 -6 H 14 M 6 -14 V -6 M -14 6 H -6 M -6 6 V 14 M 6 6 H 14 M 6 6 V 14" />
+                            </g>
+                            <g id="star-left-rv">
+                              <path d="M -14 -6 H -6 M -6 -14 V -6 M -14 6 H -6 M -6 6 V 14" />
+                            </g>
+                            <g id="star-right-rv">
+                              <path d="M 6 -6 H 14 M 6 -14 V -6 M 6 6 H 14 M 6 6 V 14" />
+                            </g>
+                          </defs>
+                          <g class="line">
+                            <line x1="24" y1="24" x2="376" y2="24" />
+                            <line x1="24" y1="68" x2="376" y2="68" />
+                            <line x1="24" y1="112" x2="376" y2="112" />
+                            <line x1="24" y1="156" x2="376" y2="156" />
+                            <line x1="24" y1="200" x2="376" y2="200" />
+                            <line x1="24" y1="244" x2="376" y2="244" />
+                            <line x1="24" y1="288" x2="376" y2="288" />
+                            <line x1="24" y1="332" x2="376" y2="332" />
+                            <line x1="24" y1="376" x2="376" y2="376" />
+                            <line x1="24" y1="420" x2="376" y2="420" />
+                          </g>
+                          <g class="line">
+                            <line x1="24" y1="24" x2="24" y2="420" />
+                            <line x1="68" y1="24" x2="68" y2="200" />
+                            <line x1="112" y1="24" x2="112" y2="200" />
+                            <line x1="156" y1="24" x2="156" y2="200" />
+                            <line x1="200" y1="24" x2="200" y2="200" />
+                            <line x1="244" y1="24" x2="244" y2="200" />
+                            <line x1="288" y1="24" x2="288" y2="200" />
+                            <line x1="332" y1="24" x2="332" y2="200" />
+                            <line x1="376" y1="24" x2="376" y2="420" />
+                            <line x1="68" y1="244" x2="68" y2="420" />
+                            <line x1="112" y1="244" x2="112" y2="420" />
+                            <line x1="156" y1="244" x2="156" y2="420" />
+                            <line x1="200" y1="244" x2="200" y2="420" />
+                            <line x1="244" y1="244" x2="244" y2="420" />
+                            <line x1="288" y1="244" x2="288" y2="420" />
+                            <line x1="332" y1="244" x2="332" y2="420" />
+                          </g>
+                          <g class="line">
+                            <line x1="156" y1="24" x2="244" y2="112" />
+                            <line x1="244" y1="24" x2="156" y2="112" />
+                            <line x1="156" y1="332" x2="244" y2="420" />
+                            <line x1="244" y1="332" x2="156" y2="420" />
+                          </g>
+                          <g class="mark">
+                            <use href="#star-full-rv" x="68" y="112" />
+                            <use href="#star-full-rv" x="332" y="112" />
+                            <use href="#star-right-rv" x="24" y="156" />
+                            <use href="#star-full-rv" x="112" y="156" />
+                            <use href="#star-full-rv" x="200" y="156" />
+                            <use href="#star-full-rv" x="288" y="156" />
+                            <use href="#star-left-rv" x="376" y="156" />
+                            <use href="#star-right-rv" x="24" y="288" />
+                            <use href="#star-full-rv" x="112" y="288" />
+                            <use href="#star-full-rv" x="200" y="288" />
+                            <use href="#star-full-rv" x="288" y="288" />
+                            <use href="#star-left-rv" x="376" y="288" />
+                            <use href="#star-full-rv" x="68" y="332" />
+                            <use href="#star-full-rv" x="332" y="332" />
+                          </g>
+                        </svg>
+                        <div class="river-label">
+                          <span>楚 河</span>
+                          <span>汉 界</span>
+                        </div>
+                        <div id="review-board-points" class="board-points"></div>
+                      </div>
+                      <div class="file-label file-label-bottom">
+                        <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="review-board-status" class="panel review-board-status"></div>
+                </aside>
+                <section class="review-info-pane">
+                  <div class="row">
+                    <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
+                    <select id="tag-type">
+                      <option value="漏算">漏算</option>
+                      <option value="冒进">冒进</option>
+                      <option value="忽略将军">忽略将军</option>
+                      <option value="调子过多">调子过多</option>
+                      <option value="好棋">好棋</option>
+                    </select>
+                  </div>
+                  <input id="tag-note" placeholder="备注（可选）" />
+                  <button id="add-tag-btn" type="button">添加手动标签</button>
+                  <div id="review-result" class="panel review-result-panel"></div>
+                </section>
               </div>
-              <input id="tag-note" placeholder="备注（可选）" />
-              <button id="add-tag-btn" type="button">添加手动标签</button>
-              <div id="review-result" class="panel"></div>
             </div>
           </div>
         </section>
 
-        <section class="page-view" id="battle-card" data-view="battle-card">
+        <section class="page-view board-page" id="battle-card" data-view="battle-card">
           <div class="card">
         <div class="page-head">
           <div>

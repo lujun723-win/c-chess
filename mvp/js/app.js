@@ -62,6 +62,8 @@ const boardEl = document.getElementById("xiangqi-board");
 const moveListEl = document.getElementById("move-list");
 const reviewResultEl = document.getElementById("review-result");
 const reviewGameSelect = document.getElementById("review-game-select");
+const reviewBoardEl = document.getElementById("review-board-points");
+const reviewBoardStatus = document.getElementById("review-board-status");
 const analyzeGameBtn = document.getElementById("analyze-game-btn");
 const tagPlyInput = document.getElementById("tag-ply");
 const tagTypeSelect = document.getElementById("tag-type");
@@ -126,6 +128,7 @@ const reviewState = {
 const renderCache = {
   gameBoardKey: "",
   battleBoardKey: "",
+  reviewBoardKey: "",
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
@@ -177,6 +180,22 @@ function battleBoardRenderKey(snap) {
     snap.checkedSide || "",
     selectedPointKey(battleState.selected),
   ].join("::");
+}
+
+function reviewBoardRenderKey(snap) {
+  return [boardMatrixKey(snap.board), snap.checkedSide || ""].join("::");
+}
+
+function getLiveGameSnapshot() {
+  if (!gameState.gameId) return null;
+  const targetPly = gameState.followLatest ? Number.MAX_SAFE_INTEGER : gameState.ply;
+  return getSnapshot(gameState.gameId, targetPly);
+}
+
+function getLiveBattleSnapshot() {
+  if (!battleState.battleId) return null;
+  const targetPly = battleState.followLatest ? Number.MAX_SAFE_INTEGER : battleState.ply;
+  return getBattleSnapshot(battleState.battleId, targetPly);
 }
 
 function createFxNode(className, row, col, text = "") {
@@ -682,6 +701,10 @@ function refreshIcons() {
   }
 }
 
+function isBoardPriorityView(viewId) {
+  return viewId === "game-card" || viewId === "battle-card";
+}
+
 function activateView(viewId, { updateHash = true } = {}) {
   const targetId = pageViews.some((view) => view.id === viewId) ? viewId : "home-card";
   pageViews.forEach((view) => {
@@ -693,6 +716,7 @@ function activateView(viewId, { updateHash = true } = {}) {
   if (updateHash) {
     history.replaceState(null, "", `#${targetId}`);
   }
+  document.body.classList.toggle("board-view-lock", isBoardPriorityView(targetId));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -988,11 +1012,6 @@ function renderBoard() {
             cell.classList.add("checked-king");
           }
           cell.textContent = code ? pieceLabel(code) : "";
-          cell.addEventListener("pointerdown", (event) => {
-            event.preventDefault();
-            cell.blur();
-            onBoardCellClick(row, col, code, snap);
-          });
           boardEl.appendChild(cell);
         }
       }
@@ -1083,11 +1102,6 @@ function renderBattleBoard() {
             cell.classList.add("checked-king");
           }
           cell.textContent = code ? pieceLabel(code) : "";
-          cell.addEventListener("pointerdown", (event) => {
-            event.preventDefault();
-            cell.blur();
-            onBattleCellClick(row, col, code, snap, role);
-          });
           battleBoardEl.appendChild(cell);
         }
       }
@@ -1282,10 +1296,37 @@ function renderReviewResult() {
   const user = getCurrentUser();
   if (!user || !reviewState.gameId) {
     reviewResultEl.textContent = "复盘结果：请先登录，并选择一盘已结束棋局。";
+    if (reviewBoardEl) reviewBoardEl.innerHTML = "";
+    if (reviewBoardStatus) reviewBoardStatus.textContent = "复盘棋盘：选择一盘已结束对局后显示。";
+    renderCache.reviewBoardKey = "";
     return;
   }
   try {
     const report = analyzeGame(reviewState.gameId);
+    const snap = getSnapshot(reviewState.gameId, Number.MAX_SAFE_INTEGER);
+    const boardKey = reviewBoardRenderKey(snap);
+    if (reviewBoardEl && renderCache.reviewBoardKey !== boardKey) {
+      renderCache.reviewBoardKey = boardKey;
+      reviewBoardEl.innerHTML = "";
+      for (let row = 0; row < 10; row += 1) {
+        for (let col = 0; col < 9; col += 1) {
+          const code = snap.board[row][col];
+          const cell = document.createElement("div");
+          cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
+          cell.style.left = pointLeftPercent(col);
+          cell.style.top = pointTopPercent(row);
+          if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
+            cell.classList.add("checked-king");
+          }
+          cell.textContent = code ? pieceLabel(code) : "";
+          reviewBoardEl.appendChild(cell);
+        }
+      }
+    }
+    if (reviewBoardStatus) {
+      const turnText = snap.turn === "r" ? "红方" : "黑方";
+      reviewBoardStatus.textContent = `复盘棋盘：终局快照\n总手数：${snap.max} 手\n终局轮到：${turnText}\n用途：仅用于局面参照，核心信息请看右侧复盘建议。`;
+    }
     const lines = [];
     lines.push(`对局：${report.gameName}`);
     lines.push(`模式：${gameModeText(report.mode)} · 状态：${gameStatusText(report.status)}`);
@@ -1694,6 +1735,7 @@ gameSelect.addEventListener("change", () => {
   gameState.followLatest = true;
   gameState.selected = null;
   renderBoard();
+  restartAiAutoSyncLoop();
 });
 
 gameModeSelect.addEventListener("change", () => {
@@ -1754,6 +1796,7 @@ createBattleBtn.addEventListener("click", () => {
     battleState.selected = null;
     battleState.followLatest = true;
     renderAll();
+    restartAiAutoSyncLoop();
   } catch (err) {
     alert(err.message);
   }
@@ -1809,6 +1852,7 @@ joinBattleBtn.addEventListener("click", () => {
     battleState.selected = null;
     battleState.followLatest = true;
     renderAll();
+    restartAiAutoSyncLoop();
   } catch (err) {
     alert(err.message);
   }
@@ -1824,6 +1868,7 @@ battleSelect.addEventListener("change", () => {
 
 reviewGameSelect?.addEventListener("change", () => {
   reviewState.gameId = reviewGameSelect.value || null;
+  renderCache.reviewBoardKey = "";
   renderReviewResult();
 });
 

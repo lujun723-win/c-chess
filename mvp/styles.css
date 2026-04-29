@@ -31,6 +31,10 @@ body {
   line-height: 1.55;
 }
 
+body.board-view-lock {
+  overflow: hidden;
+}
+
 .top {
   padding: 18px 18px 16px;
   border-bottom: 1px solid var(--line);
@@ -115,12 +119,24 @@ body {
   gap: 14px;
 }
 
+body.board-view-lock .app-shell {
+  height: calc(100vh - 86px);
+}
+
+body.board-view-lock .workspace {
+  height: 100%;
+}
+
 .page-view {
   display: none;
 }
 
 .page-view.is-active {
   display: block;
+}
+
+body.board-view-lock .page-view.board-page.is-active {
+  height: 100%;
 }
 
 .module-grid {
@@ -211,6 +227,12 @@ body {
 
 .page-view > .card {
   width: 100%;
+}
+
+body.board-view-lock .page-view.board-page.is-active > .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-head {
@@ -373,6 +395,10 @@ body {
   gap: 10px;
 }
 
+body.board-view-lock .page-view.board-page.is-active .stack {
+  min-height: 0;
+}
+
 .stack > label {
   color: var(--muted);
   font-size: 13px;
@@ -493,12 +519,21 @@ hr {
   align-items: start;
 }
 
+body.board-view-lock .page-view.board-page.is-active .play-surface {
+  height: 100%;
+  min-height: 0;
+}
+
 .board-column {
   position: sticky;
   top: 92px;
   display: grid;
   gap: 10px;
   align-self: start;
+}
+
+body.board-view-lock .page-view.board-page.is-active .board-column {
+  position: static;
 }
 
 .xiangqi-board-frame {
@@ -515,9 +550,62 @@ hr {
   align-content: start;
 }
 
+body.board-view-lock .page-view.board-page.is-active .info-column {
+  max-height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+}
+
 .metric-panel {
   margin-top: 0;
   min-height: 160px;
+}
+
+.review-surface {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.review-board-pane {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.review-board-wrap {
+  border: 1px solid rgba(214, 201, 185, 0.95);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(249, 243, 235, 0.82));
+  padding: 8px;
+}
+
+.review-board {
+  width: min(100%, 264px);
+  margin: 0 auto;
+}
+
+.review-board .cell {
+  pointer-events: none;
+}
+
+.review-board-status {
+  margin-top: 0;
+  min-height: 94px;
+}
+
+.review-info-pane {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.review-result-panel {
+  margin-top: 0;
+  min-height: 420px;
 }
 
 .replay-row {
@@ -991,6 +1079,10 @@ hr {
   }
 
   .play-surface {
+    grid-template-columns: 1fr;
+  }
+
+  .review-surface {
     grid-template-columns: 1fr;
   }
 
