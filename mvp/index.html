@@ -19,7 +19,10 @@
 
     <main class="app-shell">
       <aside class="card nav-card">
-        <h2>导航</h2>
+        <div class="nav-head">
+          <p class="eyebrow">Navigation</p>
+          <h2>导航</h2>
+        </div>
         <div class="nav-list">
           <button type="button" class="nav-btn" data-target="home-card"><i data-lucide="house"></i><span>首页总览</span></button>
           <button type="button" class="nav-btn" data-target="game-card"><i data-lucide="bot"></i><span>人机对局</span></button>
@@ -33,70 +36,115 @@
       <div class="workspace">
         <section class="page-view is-active" id="home-card" data-view="home-card">
           <div class="card dashboard-card">
-          <h2>首页总览</h2>
-          <div class="overview-grid">
-            <article class="overview-item">
-              <h3>当前用户</h3>
-              <p id="overview-user" class="overview-main">未登录</p>
-              <p id="overview-user-sub" class="overview-sub">登录后可开始训练</p>
-            </article>
-            <article class="overview-item">
-              <h3>家庭组</h3>
-              <p id="overview-family" class="overview-main">0</p>
-              <p id="overview-family-sub" class="overview-sub">未加入家庭组</p>
-            </article>
-            <article class="overview-item">
-              <h3>我的对局</h3>
-              <p id="overview-games" class="overview-main">0</p>
-              <p id="overview-games-sub" class="overview-sub">进行中 0</p>
-            </article>
-            <article class="overview-item">
-              <h3>网络对战</h3>
-              <p id="overview-battles" class="overview-main">0</p>
-              <p id="overview-battles-sub" class="overview-sub">进行中 0</p>
-            </article>
-            <article class="overview-item overview-item-wide">
-              <h3>最近一步</h3>
-              <p id="overview-last-move" class="overview-main">暂无</p>
-              <p id="overview-last-move-sub" class="overview-sub">开始一盘新棋吧</p>
-            </article>
-            <article class="overview-item overview-item-wide">
-              <h3>轮到谁走</h3>
-              <p id="overview-turn" class="overview-main">暂无对局</p>
-              <p id="overview-turn-sub" class="overview-sub">可在下方快速进入功能区</p>
-            </article>
-          </div>
-          <div class="quick-actions">
-            <button id="quick-go-game" type="button"><i data-lucide="swords"></i><span>进入人机对局</span></button>
-            <button id="quick-go-battle" type="button"><i data-lucide="radio-tower"></i><span>进入双人对战</span></button>
-            <button id="quick-go-review" type="button"><i data-lucide="notebook-pen"></i><span>进入复盘分析</span></button>
-            <button id="quick-go-family" type="button"><i data-lucide="users-round"></i><span>进入家庭组</span></button>
-          </div>
+            <div class="page-head home-head">
+              <div>
+                <p class="eyebrow">Overview</p>
+                <h2>首页总览</h2>
+                <p class="page-note">把当前学习状态、对局动态和家庭协同信息收在一屏里。</p>
+              </div>
+              <div class="home-actions">
+                <button id="quick-go-game" type="button"><i data-lucide="swords"></i><span>进入人机对局</span></button>
+                <button id="quick-go-battle" type="button"><i data-lucide="radio-tower"></i><span>进入双人对战</span></button>
+                <button id="quick-go-review" type="button"><i data-lucide="notebook-pen"></i><span>进入复盘分析</span></button>
+                <button id="quick-go-family" type="button"><i data-lucide="users-round"></i><span>进入家庭组</span></button>
+              </div>
+            </div>
+
+            <div class="hero-summary">
+              <div class="hero-copy">
+                <p class="eyebrow">Chess Growth Loop</p>
+                <h3 class="hero-title">让每一盘棋，都能变成下一次更稳的判断。</h3>
+                <p class="hero-text">首页只保留关键摘要。进入具体页面时，再展开对局、复盘与家庭数据的完整操作。</p>
+              </div>
+              <div class="hero-focus">
+                <p class="hero-focus-label">当前焦点</p>
+                <p id="overview-turn" class="hero-focus-main">暂无对局</p>
+                <p id="overview-turn-sub" class="hero-focus-sub">可在下方快速进入功能区</p>
+              </div>
+            </div>
+
+            <div class="overview-grid">
+              <article class="overview-item">
+                <h3>当前用户</h3>
+                <p id="overview-user" class="overview-main">未登录</p>
+                <p id="overview-user-sub" class="overview-sub">登录后可开始训练</p>
+              </article>
+              <article class="overview-item">
+                <h3>家庭组</h3>
+                <p id="overview-family" class="overview-main">0</p>
+                <p id="overview-family-sub" class="overview-sub">未加入家庭组</p>
+              </article>
+              <article class="overview-item">
+                <h3>我的对局</h3>
+                <p id="overview-games" class="overview-main">0</p>
+                <p id="overview-games-sub" class="overview-sub">进行中 0</p>
+              </article>
+              <article class="overview-item">
+                <h3>网络对战</h3>
+                <p id="overview-battles" class="overview-main">0</p>
+                <p id="overview-battles-sub" class="overview-sub">进行中 0</p>
+              </article>
+            </div>
+
+            <div class="home-secondary-grid">
+              <article class="summary-card">
+                <p class="eyebrow">Latest Move</p>
+                <h3>最近一步</h3>
+                <p id="overview-last-move" class="summary-main">暂无</p>
+                <p id="overview-last-move-sub" class="overview-sub">开始一盘新棋吧</p>
+              </article>
+              <article class="summary-card quiet">
+                <p class="eyebrow">Flow</p>
+                <h3>今日建议</h3>
+                <p class="summary-main">先对局，再复盘。</p>
+                <p class="overview-sub">如果已有家庭组，再看孩子本周完成度。</p>
+              </article>
+            </div>
           </div>
         </section>
 
         <section class="page-view" id="auth-card" data-view="auth-card">
           <div class="card">
-            <h2>账号</h2>
-            <form id="register-form" class="stack">
-              <input id="reg-name" placeholder="昵称（例：爸爸）" required />
-              <input id="reg-email" placeholder="邮箱" required type="email" />
-              <input id="reg-password" placeholder="密码" required type="password" />
-              <button type="submit">注册</button>
-            </form>
-            <hr />
-            <form id="login-form" class="stack">
-              <input id="login-email" placeholder="邮箱" required type="email" />
-              <input id="login-password" placeholder="密码" required type="password" />
-              <button type="submit">登录</button>
-            </form>
+            <div class="page-head">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h2>账号管理</h2>
+                <p class="page-note">统一处理注册、登录和当前会话状态。</p>
+              </div>
+            </div>
+            <div class="module-grid auth-grid">
+              <section class="surface-card">
+                <h3>注册</h3>
+                <form id="register-form" class="stack">
+                  <input id="reg-name" placeholder="昵称（例：爸爸）" required />
+                  <input id="reg-email" placeholder="邮箱" required type="email" />
+                  <input id="reg-password" placeholder="密码" required type="password" />
+                  <button type="submit">注册</button>
+                </form>
+              </section>
+              <section class="surface-card">
+                <h3>登录</h3>
+                <form id="login-form" class="stack">
+                  <input id="login-email" placeholder="邮箱" required type="email" />
+                  <input id="login-password" placeholder="密码" required type="password" />
+                  <button type="submit">登录</button>
+                </form>
+              </section>
+            </div>
           </div>
         </section>
 
         <section class="page-view" id="family-card" data-view="family-card">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">Family</p>
+              <h2>家庭组</h2>
+              <p class="page-note">支持家庭共学与只读查看，数据仍然按账号隔离。</p>
+            </div>
+          </div>
           <div class="module-grid">
             <section class="card">
-              <h2>家庭组</h2>
+              <h2>成员与邀请</h2>
               <form id="create-family-form" class="stack">
                 <input id="family-name" placeholder="家庭组名称（例：我们家棋社）" required />
                 <button type="submit">创建家庭组（当前用户为家长）</button>
@@ -137,7 +185,13 @@
 
         <section class="page-view" id="game-card" data-view="game-card">
           <div class="card">
-        <h2>人机对战 / 棋局回放</h2>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Practice</p>
+            <h2>人机对战 / 棋局回放</h2>
+            <p class="page-note">录入、走棋、悔棋、分析和回放都集中在这一页。</p>
+          </div>
+        </div>
         <div class="stack">
           <div class="row">
             <input id="game-name" placeholder="新对局名称（可选）" />
@@ -260,7 +314,13 @@
 
         <section class="page-view" id="review-card" data-view="review-card">
           <div class="card">
-            <h2>复盘基础</h2>
+            <div class="page-head">
+              <div>
+                <p class="eyebrow">Review</p>
+                <h2>复盘分析</h2>
+                <p class="page-note">把关键失误、风险和手动标记整理成可回看的复盘材料。</p>
+              </div>
+            </div>
             <div class="stack">
               <button id="analyze-game-btn" type="button">生成复盘分析</button>
               <div class="row">
@@ -282,7 +342,13 @@
 
         <section class="page-view" id="battle-card" data-view="battle-card">
           <div class="card">
-        <h2>对战（双账号轮换）</h2>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Battle</p>
+            <h2>双人对战</h2>
+            <p class="page-note">用于家庭内双账号对弈，也支持回放和局面同步查看。</p>
+          </div>
+        </div>
         <div class="stack">
           <div class="row">
             <input id="battle-name" placeholder="对战名称（可选）" />
