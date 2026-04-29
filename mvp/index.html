@@ -31,7 +31,8 @@
       </aside>
 
       <div class="workspace">
-        <section class="card dashboard-card" id="home-card">
+        <section class="page-view is-active" id="home-card" data-view="home-card">
+          <div class="card dashboard-card">
           <h2>首页总览</h2>
           <div class="overview-grid">
             <article class="overview-item">
@@ -71,64 +72,71 @@
             <button id="quick-go-review" type="button"><i data-lucide="notebook-pen"></i><span>进入复盘分析</span></button>
             <button id="quick-go-family" type="button"><i data-lucide="users-round"></i><span>进入家庭组</span></button>
           </div>
+          </div>
         </section>
 
-        <div class="module-grid">
-      <section class="card" id="auth-card">
-        <h2>账号</h2>
-        <form id="register-form" class="stack">
-          <input id="reg-name" placeholder="昵称（例：爸爸）" required />
-          <input id="reg-email" placeholder="邮箱" required type="email" />
-          <input id="reg-password" placeholder="密码" required type="password" />
-          <button type="submit">注册</button>
-        </form>
-        <hr />
-        <form id="login-form" class="stack">
-          <input id="login-email" placeholder="邮箱" required type="email" />
-          <input id="login-password" placeholder="密码" required type="password" />
-          <button type="submit">登录</button>
-        </form>
-      </section>
-
-      <section class="card" id="family-card">
-        <h2>家庭组</h2>
-        <form id="create-family-form" class="stack">
-          <input id="family-name" placeholder="家庭组名称（例：我们家棋社）" required />
-          <button type="submit">创建家庭组（当前用户为家长）</button>
-        </form>
-        <hr />
-        <form id="join-family-form" class="stack">
-          <input id="join-code" placeholder="邀请码" required />
-          <select id="join-role">
-            <option value="child">孩子</option>
-            <option value="parent">家长</option>
-          </select>
-          <button type="submit">加入家庭组</button>
-        </form>
-        <hr />
-        <div class="stack">
-          <h3>家庭组维护（仅创建者）</h3>
-          <input id="manage-family-name" placeholder="新家庭组名称" />
-          <div class="row">
-            <button id="rename-family-btn" type="button">改名</button>
-            <button id="refresh-invite-btn" type="button">重置邀请码</button>
+        <section class="page-view" id="auth-card" data-view="auth-card">
+          <div class="card">
+            <h2>账号</h2>
+            <form id="register-form" class="stack">
+              <input id="reg-name" placeholder="昵称（例：爸爸）" required />
+              <input id="reg-email" placeholder="邮箱" required type="email" />
+              <input id="reg-password" placeholder="密码" required type="password" />
+              <button type="submit">注册</button>
+            </form>
+            <hr />
+            <form id="login-form" class="stack">
+              <input id="login-email" placeholder="邮箱" required type="email" />
+              <input id="login-password" placeholder="密码" required type="password" />
+              <button type="submit">登录</button>
+            </form>
           </div>
-          <button id="dissolve-family-btn" type="button">解散家庭组</button>
-        </div>
-        <div id="family-info" class="panel"></div>
-      </section>
+        </section>
 
-      <section class="card" id="permission-card">
-        <h2>权限演示</h2>
-        <div class="stack">
-          <button id="seed-data-btn">生成示例学习数据</button>
-          <button id="view-self-btn">查看我的数据</button>
-          <button id="view-child-btn">家长查看孩子数据</button>
-        </div>
-        <div id="permission-result" class="panel"></div>
-      </section>
+        <section class="page-view" id="family-card" data-view="family-card">
+          <div class="module-grid">
+            <section class="card">
+              <h2>家庭组</h2>
+              <form id="create-family-form" class="stack">
+                <input id="family-name" placeholder="家庭组名称（例：我们家棋社）" required />
+                <button type="submit">创建家庭组（当前用户为家长）</button>
+              </form>
+              <hr />
+              <form id="join-family-form" class="stack">
+                <input id="join-code" placeholder="邀请码" required />
+                <select id="join-role">
+                  <option value="child">孩子</option>
+                  <option value="parent">家长</option>
+                </select>
+                <button type="submit">加入家庭组</button>
+              </form>
+              <hr />
+              <div class="stack">
+                <h3>家庭组维护（仅创建者）</h3>
+                <input id="manage-family-name" placeholder="新家庭组名称" />
+                <div class="row">
+                  <button id="rename-family-btn" type="button">改名</button>
+                  <button id="refresh-invite-btn" type="button">重置邀请码</button>
+                </div>
+                <button id="dissolve-family-btn" type="button">解散家庭组</button>
+              </div>
+              <div id="family-info" class="panel"></div>
+            </section>
 
-      <section class="card" id="game-card">
+            <section class="card" id="permission-card">
+              <h2>家庭数据</h2>
+              <div class="stack">
+                <button id="seed-data-btn">生成示例学习数据</button>
+                <button id="view-self-btn">查看我的数据</button>
+                <button id="view-child-btn">家长查看孩子数据</button>
+              </div>
+              <div id="permission-result" class="panel"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page-view" id="game-card" data-view="game-card">
+          <div class="card">
         <h2>人机对战 / 棋局回放</h2>
         <div class="stack">
           <div class="row">
@@ -247,29 +255,33 @@
           </div>
           <div id="move-list" class="panel"></div>
         </div>
-      </section>
-
-      <section class="card" id="review-card">
-        <h2>复盘基础</h2>
-        <div class="stack">
-          <button id="analyze-game-btn" type="button">生成复盘分析</button>
-          <div class="row">
-            <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
-            <select id="tag-type">
-              <option value="漏算">漏算</option>
-              <option value="冒进">冒进</option>
-              <option value="忽略将军">忽略将军</option>
-              <option value="调子过多">调子过多</option>
-              <option value="好棋">好棋</option>
-            </select>
           </div>
-          <input id="tag-note" placeholder="备注（可选）" />
-          <button id="add-tag-btn" type="button">添加手动标签</button>
-          <div id="review-result" class="panel"></div>
-        </div>
-      </section>
+        </section>
 
-      <section class="card" id="battle-card">
+        <section class="page-view" id="review-card" data-view="review-card">
+          <div class="card">
+            <h2>复盘基础</h2>
+            <div class="stack">
+              <button id="analyze-game-btn" type="button">生成复盘分析</button>
+              <div class="row">
+                <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
+                <select id="tag-type">
+                  <option value="漏算">漏算</option>
+                  <option value="冒进">冒进</option>
+                  <option value="忽略将军">忽略将军</option>
+                  <option value="调子过多">调子过多</option>
+                  <option value="好棋">好棋</option>
+                </select>
+              </div>
+              <input id="tag-note" placeholder="备注（可选）" />
+              <button id="add-tag-btn" type="button">添加手动标签</button>
+              <div id="review-result" class="panel"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page-view" id="battle-card" data-view="battle-card">
+          <div class="card">
         <h2>对战（双账号轮换）</h2>
         <div class="stack">
           <div class="row">
@@ -376,8 +388,8 @@
           </div>
           <div id="battle-move-list" class="panel"></div>
         </div>
-      </section>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
 

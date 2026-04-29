@@ -98,6 +98,7 @@ const quickGoGameBtn = document.getElementById("quick-go-game");
 const quickGoBattleBtn = document.getElementById("quick-go-battle");
 const quickGoReviewBtn = document.getElementById("quick-go-review");
 const quickGoFamilyBtn = document.getElementById("quick-go-family");
+const pageViews = Array.from(document.querySelectorAll(".page-view"));
 
 const gameState = {
   gameId: null,
@@ -566,13 +567,18 @@ function refreshIcons() {
   }
 }
 
-function focusCard(cardId) {
-  const card = document.getElementById(cardId);
-  if (!card) return;
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
-  navButtons.forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.target === cardId);
+function activateView(viewId, { updateHash = true } = {}) {
+  const targetId = pageViews.some((view) => view.id === viewId) ? viewId : "home-card";
+  pageViews.forEach((view) => {
+    view.classList.toggle("is-active", view.id === targetId);
   });
+  navButtons.forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.target === targetId);
+  });
+  if (updateHash) {
+    history.replaceState(null, "", `#${targetId}`);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function latestMoveSummaryFromGame(game) {
@@ -1222,13 +1228,13 @@ function setupGameModeControls() {
 function setupNavigation() {
   navButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      focusCard(btn.dataset.target || "home-card");
+      activateView(btn.dataset.target || "home-card");
     });
   });
-  quickGoGameBtn?.addEventListener("click", () => focusCard("game-card"));
-  quickGoBattleBtn?.addEventListener("click", () => focusCard("battle-card"));
-  quickGoReviewBtn?.addEventListener("click", () => focusCard("review-card"));
-  quickGoFamilyBtn?.addEventListener("click", () => focusCard("family-card"));
+  quickGoGameBtn?.addEventListener("click", () => activateView("game-card"));
+  quickGoBattleBtn?.addEventListener("click", () => activateView("battle-card"));
+  quickGoReviewBtn?.addEventListener("click", () => activateView("review-card"));
+  quickGoFamilyBtn?.addEventListener("click", () => activateView("family-card"));
 }
 
 document.getElementById("register-form").addEventListener("submit", (e) => {
@@ -1599,7 +1605,7 @@ window.addEventListener("pageshow", () => {
 setupGameModeControls();
 setupNavigation();
 renderAll();
-focusCard("home-card");
+activateView(window.location.hash?.slice(1) || "home-card", { updateHash: false });
 restartAiAutoSyncLoop();
 restartBattleAutoSyncLoop();
 restartBattleRealtimeChannel();

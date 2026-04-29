@@ -81,6 +81,14 @@ body {
   gap: 14px;
 }
 
+.page-view {
+  display: none;
+}
+
+.page-view.is-active {
+  display: block;
+}
+
 .module-grid {
   display: grid;
   gap: 14px;
@@ -147,6 +155,10 @@ body {
 
 .dashboard-card {
   padding: 16px;
+}
+
+.page-view > .card {
+  width: 100%;
 }
 
 .overview-grid {
