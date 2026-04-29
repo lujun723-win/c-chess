@@ -646,6 +646,7 @@ function renderReviewGameOptions() {
 
 function renderGameWorkspace() {
   if (!gameSetupPanel || !gameLivePanel) return;
+  const activeViewId = document.querySelector(".page-view.is-active")?.id || "";
   const user = getCurrentUser();
   if (!user || !gameState.gameId) {
     gameSetupPanel.hidden = false;
@@ -654,6 +655,7 @@ function renderGameWorkspace() {
     if (gameActiveSubtitle) {
       gameActiveSubtitle.textContent = "开始一盘新棋，或从历史对局进入回放。";
     }
+    updateBoardViewLock(activeViewId);
     return;
   }
   try {
@@ -667,9 +669,11 @@ function renderGameWorkspace() {
       const statusText = game.status === "finished" ? "已结束，可回放与复盘。" : "对局进行中。";
       gameActiveSubtitle.textContent = `${modeText} · ${statusText}`;
     }
+    updateBoardViewLock(activeViewId);
   } catch (_err) {
     gameSetupPanel.hidden = false;
     gameLivePanel.classList.remove("live-focused");
+    updateBoardViewLock(activeViewId);
   }
 }
 
@@ -701,8 +705,14 @@ function refreshIcons() {
   }
 }
 
-function isBoardPriorityView(viewId) {
-  return viewId === "game-card" || viewId === "battle-card";
+function shouldLockBoardView(viewId) {
+  if (viewId === "battle-card") return true;
+  if (viewId !== "game-card") return false;
+  return Boolean(gameSetupPanel?.hidden);
+}
+
+function updateBoardViewLock(viewId) {
+  document.body.classList.toggle("board-view-lock", shouldLockBoardView(viewId));
 }
 
 function activateView(viewId, { updateHash = true } = {}) {
@@ -716,7 +726,7 @@ function activateView(viewId, { updateHash = true } = {}) {
   if (updateHash) {
     history.replaceState(null, "", `#${targetId}`);
   }
-  document.body.classList.toggle("board-view-lock", isBoardPriorityView(targetId));
+  updateBoardViewLock(targetId);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
