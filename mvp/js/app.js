@@ -81,6 +81,23 @@ const battleFirstPlyBtn = document.getElementById("battle-first-ply-btn");
 const battlePrevPlyBtn = document.getElementById("battle-prev-ply-btn");
 const battleNextPlyBtn = document.getElementById("battle-next-ply-btn");
 const battleLastPlyBtn = document.getElementById("battle-last-ply-btn");
+const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
+const overviewUser = document.getElementById("overview-user");
+const overviewUserSub = document.getElementById("overview-user-sub");
+const overviewFamily = document.getElementById("overview-family");
+const overviewFamilySub = document.getElementById("overview-family-sub");
+const overviewGames = document.getElementById("overview-games");
+const overviewGamesSub = document.getElementById("overview-games-sub");
+const overviewBattles = document.getElementById("overview-battles");
+const overviewBattlesSub = document.getElementById("overview-battles-sub");
+const overviewLastMove = document.getElementById("overview-last-move");
+const overviewLastMoveSub = document.getElementById("overview-last-move-sub");
+const overviewTurn = document.getElementById("overview-turn");
+const overviewTurnSub = document.getElementById("overview-turn-sub");
+const quickGoGameBtn = document.getElementById("quick-go-game");
+const quickGoBattleBtn = document.getElementById("quick-go-battle");
+const quickGoReviewBtn = document.getElementById("quick-go-review");
+const quickGoFamilyBtn = document.getElementById("quick-go-family");
 
 const gameState = {
   gameId: null,
@@ -543,6 +560,130 @@ function gameStatusText(status) {
   return "进行中";
 }
 
+function refreshIcons() {
+  if (window.lucide?.createIcons) {
+    window.lucide.createIcons();
+  }
+}
+
+function focusCard(cardId) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  navButtons.forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.target === cardId);
+  });
+}
+
+function latestMoveSummaryFromGame(game) {
+  if (!game || !game.moves?.length) return null;
+  const idx = game.moves.length - 1;
+  const move = game.moves[idx];
+  const boardBefore = game.snapshots[idx] || null;
+  return {
+    text: toChineseNotation(move, boardBefore),
+    side: move.side === "r" ? "红方" : "黑方",
+    gameName: game.name,
+    quality: move.assessment?.qualityLabel || "",
+  };
+}
+
+function findLatestMoveSummary(games, battles) {
+  const gameCandidates = [...games].sort(
+    (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
+  );
+  for (const g of gameCandidates) {
+    const x = latestMoveSummaryFromGame(g);
+    if (x) return x;
+  }
+  const battleCandidates = [...battles].sort(
+    (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
+  );
+  for (const b of battleCandidates) {
+    const x = latestMoveSummaryFromGame(b);
+    if (x) return x;
+  }
+  return null;
+}
+
+function renderHomeOverview() {
+  if (!overviewUser) return;
+  const user = getCurrentUser();
+  if (!user) {
+    overviewUser.textContent = "未登录";
+    overviewUserSub.textContent = "登录后可开始训练";
+    overviewFamily.textContent = "0";
+    overviewFamilySub.textContent = "未加入家庭组";
+    overviewGames.textContent = "0";
+    overviewGamesSub.textContent = "进行中 0";
+    overviewBattles.textContent = "0";
+    overviewBattlesSub.textContent = "进行中 0";
+    overviewLastMove.textContent = "暂无";
+    overviewLastMoveSub.textContent = "开始一盘新棋吧";
+    overviewTurn.textContent = "暂无对局";
+    overviewTurnSub.textContent = "请先登录并创建对局";
+    return;
+  }
+  let families = [];
+  let games = [];
+  let battles = [];
+  try {
+    families = getMyFamilies();
+  } catch (_err) {
+    families = [];
+  }
+  try {
+    games = getMyGames();
+  } catch (_err) {
+    games = [];
+  }
+  try {
+    battles = getMyBattles();
+  } catch (_err) {
+    battles = [];
+  }
+  const activeGames = games.filter((x) => (x.status || "active") === "active").length;
+  const activeBattles = battles.filter((x) => (x.status || "waiting") !== "finished").length;
+
+  overviewUser.textContent = user.name || user.email;
+  overviewUserSub.textContent = user.email || "当前已登录";
+  overviewFamily.textContent = String(families.length);
+  overviewFamilySub.textContent = families.length ? `家庭组：${families[0].name}` : "未加入家庭组";
+  overviewGames.textContent = String(games.length);
+  overviewGamesSub.textContent = `进行中 ${activeGames}`;
+  overviewBattles.textContent = String(battles.length);
+  overviewBattlesSub.textContent = `进行中 ${activeBattles}`;
+
+  const latest = findLatestMoveSummary(games, battles);
+  if (latest) {
+    overviewLastMove.textContent = latest.text;
+    overviewLastMoveSub.textContent = `${latest.gameName} · ${latest.side}${
+      latest.quality ? ` · ${latest.quality}` : ""
+    }`;
+  } else {
+    overviewLastMove.textContent = "暂无";
+    overviewLastMoveSub.textContent = "开始一盘新棋吧";
+  }
+
+  if (gameState.gameId) {
+    try {
+      const snap = getSnapshot(gameState.gameId, Number.MAX_SAFE_INTEGER);
+      const turnText = snap.turn === "r" ? "红方" : "黑方";
+      overviewTurn.textContent = `${turnText}走子`;
+      overviewTurnSub.textContent = snap.aiThinking
+        ? "电脑思考中"
+        : snap.status === "finished"
+          ? "当前对局已结束"
+          : "当前对局进行中";
+      return;
+    } catch (_err) {
+      // fall through
+    }
+  }
+  overviewTurn.textContent = "暂无对局";
+  overviewTurnSub.textContent = "可从首页下方快速进入功能区";
+}
+
 function describeScoreGap(gap) {
   const value = Number(gap || 0);
   if (value <= 0.35) return `几乎等同于最优着（差值 ${value.toFixed(2)}，约 0~0.5 个兵）。`;
@@ -700,6 +841,7 @@ function renderBoard() {
   }
   renderMoveList();
   renderReviewResult();
+  renderHomeOverview();
 }
 
 function renderBattleBoard() {
@@ -771,6 +913,7 @@ function renderBattleBoard() {
     undoBattleBtn.disabled = true;
   }
   renderBattleMoveList();
+  renderHomeOverview();
 }
 
 function onBoardCellClick(row, col, code, snap) {
@@ -961,6 +1104,8 @@ function renderAll() {
   renderBoard();
   renderBattleList();
   renderBattleBoard();
+  renderHomeOverview();
+  refreshIcons();
   permissionResult.textContent = "";
 }
 
@@ -1072,6 +1217,18 @@ function setupGameModeControls() {
   const aiEnabled = gameModeSelect.value === "ai";
   aiSideSelect.disabled = !aiEnabled;
   aiLevelSelect.disabled = !aiEnabled;
+}
+
+function setupNavigation() {
+  navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      focusCard(btn.dataset.target || "home-card");
+    });
+  });
+  quickGoGameBtn?.addEventListener("click", () => focusCard("game-card"));
+  quickGoBattleBtn?.addEventListener("click", () => focusCard("battle-card"));
+  quickGoReviewBtn?.addEventListener("click", () => focusCard("review-card"));
+  quickGoFamilyBtn?.addEventListener("click", () => focusCard("family-card"));
 }
 
 document.getElementById("register-form").addEventListener("submit", (e) => {
@@ -1440,7 +1597,9 @@ window.addEventListener("pageshow", () => {
 });
 
 setupGameModeControls();
+setupNavigation();
 renderAll();
+focusCard("home-card");
 restartAiAutoSyncLoop();
 restartBattleAutoSyncLoop();
 restartBattleRealtimeChannel();

@@ -3,16 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>象棋学习 MVP 骨架</title>
+    <title>象棋成长平台</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="top">
-      <h1>象棋学习 MVP（账号/家庭组/权限）</h1>
-      <div id="session-bar" class="session"></div>
+      <div class="top-inner">
+        <div class="brand">
+          <h1>象棋成长平台</h1>
+          <p class="brand-sub">家庭共学 · 对战复盘 · 段位成长</p>
+        </div>
+        <div id="session-bar" class="session"></div>
+      </div>
     </header>
 
-    <main class="layout">
+    <main class="app-shell">
+      <aside class="card nav-card">
+        <h2>导航</h2>
+        <div class="nav-list">
+          <button type="button" class="nav-btn" data-target="home-card"><i data-lucide="house"></i><span>首页总览</span></button>
+          <button type="button" class="nav-btn" data-target="game-card"><i data-lucide="bot"></i><span>人机对局</span></button>
+          <button type="button" class="nav-btn" data-target="battle-card"><i data-lucide="users"></i><span>双人对战</span></button>
+          <button type="button" class="nav-btn" data-target="review-card"><i data-lucide="scan-search"></i><span>复盘分析</span></button>
+          <button type="button" class="nav-btn" data-target="family-card"><i data-lucide="home"></i><span>家庭组</span></button>
+          <button type="button" class="nav-btn" data-target="auth-card"><i data-lucide="user-round"></i><span>账号管理</span></button>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <section class="card dashboard-card" id="home-card">
+          <h2>首页总览</h2>
+          <div class="overview-grid">
+            <article class="overview-item">
+              <h3>当前用户</h3>
+              <p id="overview-user" class="overview-main">未登录</p>
+              <p id="overview-user-sub" class="overview-sub">登录后可开始训练</p>
+            </article>
+            <article class="overview-item">
+              <h3>家庭组</h3>
+              <p id="overview-family" class="overview-main">0</p>
+              <p id="overview-family-sub" class="overview-sub">未加入家庭组</p>
+            </article>
+            <article class="overview-item">
+              <h3>我的对局</h3>
+              <p id="overview-games" class="overview-main">0</p>
+              <p id="overview-games-sub" class="overview-sub">进行中 0</p>
+            </article>
+            <article class="overview-item">
+              <h3>网络对战</h3>
+              <p id="overview-battles" class="overview-main">0</p>
+              <p id="overview-battles-sub" class="overview-sub">进行中 0</p>
+            </article>
+            <article class="overview-item overview-item-wide">
+              <h3>最近一步</h3>
+              <p id="overview-last-move" class="overview-main">暂无</p>
+              <p id="overview-last-move-sub" class="overview-sub">开始一盘新棋吧</p>
+            </article>
+            <article class="overview-item overview-item-wide">
+              <h3>轮到谁走</h3>
+              <p id="overview-turn" class="overview-main">暂无对局</p>
+              <p id="overview-turn-sub" class="overview-sub">可在下方快速进入功能区</p>
+            </article>
+          </div>
+          <div class="quick-actions">
+            <button id="quick-go-game" type="button"><i data-lucide="swords"></i><span>进入人机对局</span></button>
+            <button id="quick-go-battle" type="button"><i data-lucide="radio-tower"></i><span>进入双人对战</span></button>
+            <button id="quick-go-review" type="button"><i data-lucide="notebook-pen"></i><span>进入复盘分析</span></button>
+            <button id="quick-go-family" type="button"><i data-lucide="users-round"></i><span>进入家庭组</span></button>
+          </div>
+        </section>
+
+        <div class="module-grid">
       <section class="card" id="auth-card">
         <h2>账号</h2>
         <form id="register-form" class="stack">
@@ -316,10 +377,13 @@
           <div id="battle-move-list" class="panel"></div>
         </div>
       </section>
+        </div>
+      </div>
     </main>
 
     <script src="./vendor/xqwlight/position.js"></script>
     <script src="./vendor/xqwlight/search.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script type="module" src="./js/app.js"></script>
   </body>
 </html>
