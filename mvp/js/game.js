@@ -1240,6 +1240,14 @@ export function analyzeGame(gameId) {
   });
 
   const items = [];
+  const quality = { best: 0, inaccuracy: 0, mistake: 0 };
+  const risks = { materialLoss: 0, checkThreat: 0 };
+  const tactics = { gainMaterial: 0 };
+  const phases = {
+    opening: { best: 0, inaccuracy: 0, mistake: 0 },
+    middlegame: { best: 0, inaccuracy: 0, mistake: 0 },
+    endgame: { best: 0, inaccuracy: 0, mistake: 0 },
+  };
   for (let i = 0; i < game.moves.length; i += 1) {
     const move = game.moves[i];
     const ply = i + 1;
@@ -1247,9 +1255,12 @@ export function analyzeGame(gameId) {
     const before = game.snapshots[i];
     const after = game.snapshots[i + 1];
     const tags = [];
+    const assessmentQuality = move.assessment?.quality || "";
+    const assessmentRisks = Array.isArray(move.assessment?.risks) ? move.assessment.risks : [];
 
     if (move.captured) {
       const v = pieceValue(move.captured);
+      tactics.gainMaterial += 1;
       if (v >= 4) tags.push("战术得子");
       else tags.push("得子");
     }
@@ -1282,24 +1293,65 @@ export function analyzeGame(gameId) {
         tags.push("送子风险");
       }
     }
-    if (move.assessment?.quality === "best") tags.push("最优着法");
-    if (move.assessment?.quality === "mistake") tags.push("明显失误");
-    if (Array.isArray(move.assessment?.risks)) {
-      if (move.assessment.risks.includes(RISK_MATERIAL_LOSS)) tags.push("送子风险");
-      if (move.assessment.risks.includes("落点可能被吃")) tags.push("送子风险");
-      if (move.assessment.risks.includes(RISK_THREE_PLY)) tags.push("送子风险");
-      if (move.assessment.risks.includes("下一步可能被将")) tags.push("被将风险");
+    if (assessmentQuality === "best") tags.push("最优着法");
+    if (assessmentQuality === "mistake") tags.push("明显失误");
+    if (assessmentRisks.length) {
+      if (
+        assessmentRisks.includes(RISK_MATERIAL_LOSS) ||
+        assessmentRisks.includes("落点可能被吃") ||
+        assessmentRisks.includes(RISK_THREE_PLY)
+      ) {
+        tags.push("送子风险");
+        risks.materialLoss += 1;
+      }
+      if (assessmentRisks.includes("下一步可能被将")) {
+        tags.push("被将风险");
+        risks.checkThreat += 1;
+      }
     }
 
+    if (assessmentQuality === "best") quality.best += 1;
+    else if (assessmentQuality === "mistake") quality.mistake += 1;
+    else if (assessmentQuality === "inaccuracy") quality.inaccuracy += 1;
+
+    const phase =
+      ply <= 12 ? phases.opening : ply <= 30 ? phases.middlegame : phases.endgame;
+    if (assessmentQuality === "best") phase.best += 1;
+    else if (assessmentQuality === "mistake") phase.mistake += 1;
+    else if (assessmentQuality === "inaccuracy") phase.inaccuracy += 1;
+
     const mergedManual = manualByPly.get(ply) || [];
+    const uniqueTags = [...new Set(tags)];
     items.push({
       ply,
       side,
       notation: toChineseNotation(move, before),
-      autoTags: tags,
+      autoTags: uniqueTags,
       manualTags: mergedManual,
+      quality: assessmentQuality,
+      qualityLabel: move.assessment?.qualityLabel || "未评估",
+      risks: assessmentRisks,
+      scoreGap: Number(move.assessment?.scoreGap || 0),
     });
   }
+
+  const keyMoments = items
+    .filter(
+      (item) =>
+        item.quality === "mistake" ||
+        item.risks.length > 0 ||
+        item.manualTags.length > 0 ||
+        item.autoTags.includes("战术得子"),
+    )
+    .slice(0, 8)
+    .map((item) => ({
+      ply: item.ply,
+      side: item.side,
+      notation: item.notation,
+      qualityLabel: item.qualityLabel,
+      autoTags: item.autoTags,
+      manualTags: item.manualTags,
+    }));
 
   const tagCounter = new Map();
   items.forEach((it) => {
@@ -1315,13 +1367,23 @@ export function analyzeGame(gameId) {
   if (tagCounter.get("送子风险")) suggestions.push("优先训练“子力安全检查”：每步先看落点是否出现净亏交换。");
   if (tagCounter.get("反复调子")) suggestions.push("减少无效调子：同子二次往返前先确认是否带来实质收益。");
   if (tagCounter.get("应将")) suggestions.push("在受将场景下优先考虑“先解将，再争先”。");
+  if (quality.mistake >= 3) suggestions.push("先把明显失误最多的 3 手单独重摆一遍，比泛看全盘更容易提升。");
+  if (risks.checkThreat >= 2) suggestions.push("补一轮“将军前后 1 手”专项训练，强化先看将再看吃子的习惯。");
   if (suggestions.length === 0) suggestions.push("先补充手动标签，系统会给出更精准建议。");
 
   return {
     gameId,
     gameName: game.name,
+    mode: game.mode || "practice",
+    status: game.status || "active",
     totalPly: game.moves.length,
     items,
+    quality,
+    risks,
+    tactics,
+    phases,
+    manualTagCount: manualTags.length,
+    keyMoments,
     topIssues,
     suggestions,
   };
@@ -1608,12 +1670,13 @@ export function createBattle(name) {
   return battle;
 }
 
-export function joinBattleByCode(codeInput) {
-  const { db, userId } = requireCurrentUser();
-  const code = (codeInput || "").trim().toUpperCase();
-  if (!code) throw new Error("请输入邀请码");
-  const battle = db.battles.find((b) => b.code === code);
-  if (!battle) throw new Error("对战邀请码不存在");
+function creatorDisplayName(db, userId) {
+  const user = db.users?.find((item) => item.id === userId);
+  return user?.name || user?.email || "未知用户";
+}
+
+function joinBattleOrThrow(db, userId, battle) {
+  if (!battle) throw new Error("对战不存在");
   if (battle.status === "finished") throw new Error("该对战已结束");
   const side = userBattleSide(battle, userId);
   if (side) return battle;
@@ -1628,6 +1691,53 @@ export function joinBattleByCode(codeInput) {
   battle.updatedAt = new Date().toISOString();
   saveDb(db);
   return battle;
+}
+
+export function joinBattleByCode(codeInput) {
+  const { db, userId } = requireCurrentUser();
+  const code = (codeInput || "").trim().toUpperCase();
+  if (!code) throw new Error("请输入邀请码");
+  const battle = db.battles.find((b) => b.code === code);
+  if (!battle) throw new Error("对战邀请码不存在");
+  return joinBattleOrThrow(db, userId, battle);
+}
+
+export function joinBattleById(battleId) {
+  const { db, userId } = requireCurrentUser();
+  const battle = db.battles.find((item) => item.id === battleId);
+  return joinBattleOrThrow(db, userId, battle);
+}
+
+export function searchJoinableBattles(queryInput = "") {
+  const { db, userId } = requireCurrentUser();
+  const query = (queryInput || "").trim().toLowerCase();
+  const battles = Array.isArray(db.battles) ? db.battles : [];
+  return battles
+    .filter((battle) => {
+      if (battle.status === "finished") return false;
+      const alreadyJoined = Boolean(userBattleSide(battle, userId));
+      const hasSeat = !battle.redUserId || !battle.blackUserId;
+      if (!alreadyJoined && !hasSeat) return false;
+      if (!query) return true;
+      const creatorName = creatorDisplayName(db, battle.createdBy).toLowerCase();
+      return [battle.name, battle.code, creatorName].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(query),
+      );
+    })
+    .map((battle) => ({
+      id: battle.id,
+      code: battle.code,
+      name: battle.name,
+      status: battle.status,
+      ply: battle.moves.length,
+      creatorName: creatorDisplayName(db, battle.createdBy),
+      alreadyJoined: Boolean(userBattleSide(battle, userId)),
+      hasSeat: !battle.redUserId || !battle.blackUserId,
+      updatedAt: battle.updatedAt,
+    }))
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 }
 
 export function getMyBattles() {

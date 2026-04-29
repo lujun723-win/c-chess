@@ -24,7 +24,7 @@ import {
   analyzeGame,
   setManualReviewTag,
   createBattle,
-  joinBattleByCode,
+  joinBattleById,
   getMyBattles,
   getBattleSnapshot,
   makeBattleMove,
@@ -33,6 +33,7 @@ import {
   getBattle,
   getBattleRole,
   getAiLevels,
+  searchJoinableBattles,
 } from "./game.js";
 import { loadDb } from "./store.js";
 
@@ -60,6 +61,7 @@ const boardStatus = document.getElementById("board-status");
 const boardEl = document.getElementById("xiangqi-board");
 const moveListEl = document.getElementById("move-list");
 const reviewResultEl = document.getElementById("review-result");
+const reviewGameSelect = document.getElementById("review-game-select");
 const analyzeGameBtn = document.getElementById("analyze-game-btn");
 const tagPlyInput = document.getElementById("tag-ply");
 const tagTypeSelect = document.getElementById("tag-type");
@@ -73,7 +75,8 @@ const battleNameInput = document.getElementById("battle-name");
 const createBattleBtn = document.getElementById("create-battle-btn");
 const undoBattleBtn = document.getElementById("undo-battle-btn");
 const endBattleBtn = document.getElementById("end-battle-btn");
-const joinBattleCodeInput = document.getElementById("join-battle-code");
+const battleRoomQueryInput = document.getElementById("battle-room-query");
+const battleRoomSelect = document.getElementById("battle-room-select");
 const joinBattleBtn = document.getElementById("join-battle-btn");
 const battleSelect = document.getElementById("battle-select");
 const battleStatus = document.getElementById("battle-status");
@@ -114,6 +117,10 @@ const battleState = {
   ply: 0,
   selected: null,
   followLatest: true,
+};
+
+const reviewState = {
+  gameId: null,
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
@@ -441,7 +448,11 @@ function getOwnedFamily() {
 function renderSession() {
   const user = getCurrentUser();
   if (!user) {
-    sessionBar.textContent = "当前未登录";
+    sessionBar.innerHTML = `<button id="session-login-btn" class="session-cta" type="button">当前未登录，点击登录</button>`;
+    document.getElementById("session-login-btn")?.addEventListener("click", () => {
+      activateView("auth-card");
+      document.getElementById("login-email")?.focus();
+    });
     return;
   }
   sessionBar.innerHTML = `当前用户：${user.name}（${user.email}） <button id="logout-btn">退出登录</button>`;
@@ -540,6 +551,41 @@ function renderGameList() {
     gameState.gameId = games[0].id;
   }
   gameSelect.value = gameState.gameId;
+}
+
+function renderReviewGameOptions() {
+  if (!reviewGameSelect) return;
+  const user = getCurrentUser();
+  if (!user) {
+    reviewGameSelect.innerHTML = `<option value="">请先登录</option>`;
+    reviewState.gameId = null;
+    return;
+  }
+  let finishedGames = [];
+  try {
+    finishedGames = getMyGames().filter((game) => game.status === "finished");
+  } catch (err) {
+    reviewGameSelect.innerHTML = `<option value="">加载失败：${err.message}</option>`;
+    reviewState.gameId = null;
+    return;
+  }
+  if (!finishedGames.length) {
+    reviewGameSelect.innerHTML = `<option value="">暂无已结束棋局</option>`;
+    reviewState.gameId = null;
+    return;
+  }
+  reviewGameSelect.innerHTML = finishedGames
+    .map(
+      (game) =>
+        `<option value="${game.id}">${game.name}（${gameModeText(game.mode)} / ${game.ply}步）</option>`,
+    )
+    .join("");
+  const preferredId =
+    reviewState.gameId && finishedGames.some((game) => game.id === reviewState.gameId)
+      ? reviewState.gameId
+      : finishedGames[0].id;
+  reviewState.gameId = preferredId;
+  reviewGameSelect.value = preferredId;
 }
 
 function renderGameWorkspace() {
@@ -797,6 +843,38 @@ function renderBattleList() {
     battleState.followLatest = true;
   }
   battleSelect.value = battleState.battleId;
+}
+
+function renderBattleRoomOptions() {
+  if (!battleRoomSelect) return;
+  const user = getCurrentUser();
+  if (!user) {
+    battleRoomSelect.innerHTML = `<option value="">请先登录</option>`;
+    joinBattleBtn.disabled = true;
+    return;
+  }
+  try {
+    const rooms = searchJoinableBattles(battleRoomQueryInput?.value || "");
+    if (!rooms.length) {
+      battleRoomSelect.innerHTML = `<option value="">没有匹配的可加入房间</option>`;
+      joinBattleBtn.disabled = true;
+      return;
+    }
+    const currentValue = battleRoomSelect.value;
+    battleRoomSelect.innerHTML = rooms
+      .map(
+        (room) =>
+          `<option value="${room.id}">${room.name} · 创建人 ${room.creatorName} · ${battleStatusText(
+            room.status,
+          )} · 邀请码 ${room.code}</option>`,
+      )
+      .join("");
+    battleRoomSelect.value = rooms.some((room) => room.id === currentValue) ? currentValue : rooms[0].id;
+    joinBattleBtn.disabled = false;
+  } catch (err) {
+    battleRoomSelect.innerHTML = `<option value="">加载失败：${err.message}</option>`;
+    joinBattleBtn.disabled = true;
+  }
 }
 
 function renderBoard() {
@@ -1104,15 +1182,38 @@ function renderBattleMoveList() {
 
 function renderReviewResult() {
   const user = getCurrentUser();
-  if (!user || !gameState.gameId) {
-    reviewResultEl.textContent = "复盘结果：请先登录并选择对局。";
+  if (!user || !reviewState.gameId) {
+    reviewResultEl.textContent = "复盘结果：请先登录，并选择一盘已结束棋局。";
     return;
   }
   try {
-    const report = analyzeGame(gameState.gameId);
+    const report = analyzeGame(reviewState.gameId);
     const lines = [];
     lines.push(`对局：${report.gameName}`);
+    lines.push(`模式：${gameModeText(report.mode)} · 状态：${gameStatusText(report.status)}`);
     lines.push(`总手数：${report.totalPly}`);
+    lines.push("");
+    lines.push("全局概览：");
+    lines.push(
+      `- 质量分布：最优 ${report.quality.best} / 有更优 ${report.quality.inaccuracy} / 明显失误 ${report.quality.mistake}`,
+    );
+    lines.push(
+      `- 风险统计：送子风险 ${report.risks.materialLoss} / 被将风险 ${report.risks.checkThreat} / 战术得子 ${report.tactics.gainMaterial}`,
+    );
+    lines.push(
+      `- 手动标签：${report.manualTagCount} 条，关键片段 ${report.keyMoments.length} 处`,
+    );
+    lines.push("");
+    lines.push("阶段观察：");
+    lines.push(
+      `- 开局（前12手）：最优 ${report.phases.opening.best} / 有更优 ${report.phases.opening.inaccuracy} / 失误 ${report.phases.opening.mistake}`,
+    );
+    lines.push(
+      `- 中局（13-30手）：最优 ${report.phases.middlegame.best} / 有更优 ${report.phases.middlegame.inaccuracy} / 失误 ${report.phases.middlegame.mistake}`,
+    );
+    lines.push(
+      `- 收官（31手后）：最优 ${report.phases.endgame.best} / 有更优 ${report.phases.endgame.inaccuracy} / 失误 ${report.phases.endgame.mistake}`,
+    );
     lines.push("");
     lines.push("高频问题：");
     if (!report.topIssues.length) lines.push("- 暂无");
@@ -1120,6 +1221,21 @@ function renderReviewResult() {
     lines.push("");
     lines.push("建议：");
     report.suggestions.forEach((s) => lines.push(`- ${s}`));
+    lines.push("");
+    lines.push("关键片段：");
+    if (!report.keyMoments.length) {
+      lines.push("- 暂无明显波动，整体较平稳。");
+    } else {
+      report.keyMoments.forEach((it) => {
+        const sideText = it.side === "r" ? "红" : "黑";
+        const tags = [...it.autoTags, ...it.manualTags.map((tag) => tag.tag)].filter(Boolean);
+        lines.push(
+          `- 第 ${it.ply} 手 ${sideText} ${it.notation} | ${it.qualityLabel}${
+            tags.length ? ` | 关注：${tags.join("、")}` : ""
+          }`,
+        );
+      });
+    }
     lines.push("");
     lines.push("逐手摘要：");
     report.items.slice(0, 30).forEach((it) => {
@@ -1142,7 +1258,9 @@ function renderAll() {
   renderSession();
   renderFamilyInfo();
   renderGameList();
+  renderReviewGameOptions();
   renderBoard();
+  renderBattleRoomOptions();
   renderBattleList();
   renderBattleBoard();
   renderHomeOverview();
@@ -1488,10 +1606,10 @@ analyzeGameBtn.addEventListener("click", () => {
 
 addTagBtn.addEventListener("click", () => {
   try {
-    if (!gameState.gameId) throw new Error("请先选择对局");
+    if (!reviewState.gameId) throw new Error("请先选择已结束棋局");
     const ply = Number(tagPlyInput.value);
     if (!Number.isInteger(ply) || ply <= 0) throw new Error("请输入正确步号");
-    setManualReviewTag(gameState.gameId, ply, tagTypeSelect.value, tagNoteInput.value);
+    setManualReviewTag(reviewState.gameId, ply, tagTypeSelect.value, tagNoteInput.value);
     tagNoteInput.value = "";
     renderReviewResult();
   } catch (err) {
@@ -1549,10 +1667,15 @@ endBattleBtn.addEventListener("click", () => {
   }
 });
 
+battleRoomQueryInput?.addEventListener("input", () => {
+  renderBattleRoomOptions();
+});
+
 joinBattleBtn.addEventListener("click", () => {
   try {
-    const battle = joinBattleByCode(joinBattleCodeInput.value);
-    joinBattleCodeInput.value = "";
+    const selectedBattleId = battleRoomSelect?.value || "";
+    if (!selectedBattleId) throw new Error("请先从列表里选择一个房间");
+    const battle = joinBattleById(selectedBattleId);
     battleState.battleId = battle.id;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
@@ -1569,6 +1692,11 @@ battleSelect.addEventListener("change", () => {
   battleState.selected = null;
   battleState.followLatest = true;
   renderBattleBoard();
+});
+
+reviewGameSelect?.addEventListener("change", () => {
+  reviewState.gameId = reviewGameSelect.value || null;
+  renderReviewResult();
 });
 
 battleFirstPlyBtn.addEventListener("click", () => {

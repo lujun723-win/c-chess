@@ -335,11 +335,21 @@
               <div>
                 <p class="eyebrow">Review</p>
                 <h2>复盘分析</h2>
-                <p class="page-note">把关键失误、风险和手动标记整理成可回看的复盘材料。</p>
+                <p class="page-note">从已结束棋局中选择一盘，生成比对局内更完整的复盘材料。</p>
               </div>
             </div>
             <div class="stack">
-              <button id="analyze-game-btn" type="button">生成复盘分析</button>
+              <section class="surface-card stack">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Select Game</p>
+                    <h3>选择历史棋局</h3>
+                  </div>
+                </div>
+                <label for="review-game-select">仅显示已结束并已保存的对局</label>
+                <select id="review-game-select"></select>
+                <button id="analyze-game-btn" type="button">加载并生成复盘分析</button>
+              </section>
               <div class="row">
                 <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
                 <select id="tag-type">
@@ -371,10 +381,17 @@
             <input id="battle-name" placeholder="对战名称（可选）" />
             <button id="create-battle-btn" type="button">创建对战房间</button>
           </div>
-          <div class="row">
-            <input id="join-battle-code" placeholder="输入邀请码加入（如 AB12CD）" />
-            <button id="join-battle-btn" type="button">加入对战</button>
-          </div>
+          <section class="surface-card stack">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Join Room</p>
+                <h3>加入已有房间</h3>
+              </div>
+            </div>
+            <input id="battle-room-query" placeholder="搜索对战名称 / 邀请码 / 创建人" />
+            <select id="battle-room-select"></select>
+            <button id="join-battle-btn" type="button">加入所选房间</button>
+          </section>
           <label for="battle-select">我的对战列表</label>
           <select id="battle-select"></select>
           <button id="undo-battle-btn" type="button">悔棋（本局最多3次）</button>
