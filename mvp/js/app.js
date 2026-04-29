@@ -49,11 +49,13 @@ const gameModeSelect = document.getElementById("game-mode");
 const aiSideSelect = document.getElementById("ai-side");
 const aiLevelSelect = document.getElementById("ai-level");
 const createGameBtn = document.getElementById("create-game-btn");
-const sfxTestBtn = document.getElementById("sfx-test-btn");
-const sfxStatus = document.getElementById("sfx-status");
 const undoGameBtn = document.getElementById("undo-game-btn");
 const endGameBtn = document.getElementById("end-game-btn");
 const gameSelect = document.getElementById("game-select");
+const gameSetupPanel = document.getElementById("game-setup-panel");
+const gameLivePanel = document.getElementById("game-live-panel");
+const gameActiveTitle = document.getElementById("game-active-title");
+const gameActiveSubtitle = document.getElementById("game-active-subtitle");
 const boardStatus = document.getElementById("board-status");
 const boardEl = document.getElementById("xiangqi-board");
 const moveListEl = document.getElementById("move-list");
@@ -184,6 +186,7 @@ function sfxDestination(ctx) {
 }
 
 function refreshSfxStatus() {
+  const sfxStatus = document.getElementById("sfx-status");
   if (!sfxStatus) return;
   const ctx = sfxAudioCtx;
   if (!ctx) {
@@ -539,6 +542,35 @@ function renderGameList() {
   gameSelect.value = gameState.gameId;
 }
 
+function renderGameWorkspace() {
+  if (!gameSetupPanel || !gameLivePanel) return;
+  const user = getCurrentUser();
+  if (!user || !gameState.gameId) {
+    gameSetupPanel.hidden = false;
+    gameLivePanel.classList.remove("live-focused");
+    if (gameActiveTitle) gameActiveTitle.textContent = "当前对局";
+    if (gameActiveSubtitle) {
+      gameActiveSubtitle.textContent = "开始一盘新棋，或从历史对局进入回放。";
+    }
+    return;
+  }
+  try {
+    const game = getGame(gameState.gameId);
+    const isActiveGame = (game.status || "active") === "active";
+    gameSetupPanel.hidden = isActiveGame;
+    gameLivePanel.classList.toggle("live-focused", isActiveGame);
+    if (gameActiveTitle) gameActiveTitle.textContent = game.name || "当前对局";
+    if (gameActiveSubtitle) {
+      const modeText = game.mode === "ai" ? "人机对战" : "练习模式";
+      const statusText = game.status === "finished" ? "已结束，可回放与复盘。" : "对局进行中。";
+      gameActiveSubtitle.textContent = `${modeText} · ${statusText}`;
+    }
+  } catch (_err) {
+    gameSetupPanel.hidden = false;
+    gameLivePanel.classList.remove("live-focused");
+  }
+}
+
 function battleStatusText(status) {
   if (status === "waiting") return "等待对手加入";
   if (status === "active") return "进行中";
@@ -771,10 +803,12 @@ function renderBoard() {
   const user = getCurrentUser();
   if (!user || !gameState.gameId) {
     boardEl.innerHTML = "";
-    boardStatus.textContent = "请登录并新建对局。";
+    boardStatus.textContent = "请先新建对局，或从历史对局进入回放。";
     undoGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
+    renderHomeOverview();
+    renderGameWorkspace();
     return;
   }
   try {
@@ -848,6 +882,7 @@ function renderBoard() {
   renderMoveList();
   renderReviewResult();
   renderHomeOverview();
+  renderGameWorkspace();
 }
 
 function renderBattleBoard() {
@@ -1354,6 +1389,7 @@ dissolveFamilyBtn.addEventListener("click", () => {
 
 createGameBtn.addEventListener("click", () => {
   try {
+    unlockSfxFromGesture();
     const game = createGame(gameNameInput.value, {
       mode: gameModeSelect.value,
       aiSide: aiSideSelect.value,
@@ -1461,10 +1497,6 @@ addTagBtn.addEventListener("click", () => {
   } catch (err) {
     alert(err.message);
   }
-});
-
-sfxTestBtn.addEventListener("click", () => {
-  unlockSfxFromGesture({ preview: true });
 });
 
 createBattleBtn.addEventListener("click", () => {

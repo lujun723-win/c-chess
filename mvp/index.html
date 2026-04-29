@@ -185,46 +185,62 @@
 
         <section class="page-view" id="game-card" data-view="game-card">
           <div class="card">
-        <div class="page-head">
-          <div>
-            <p class="eyebrow">Practice</p>
-            <h2>人机对战 / 棋局回放</h2>
-            <p class="page-note">录入、走棋、悔棋、分析和回放都集中在这一页。</p>
-          </div>
-        </div>
-        <div class="stack">
-          <div class="row">
-            <input id="game-name" placeholder="新对局名称（可选）" />
-            <button id="create-game-btn" type="button">新建对局</button>
-          </div>
-          <div class="row">
-            <select id="game-mode">
-              <option value="practice">练习模式（手动双边录入）</option>
-              <option value="ai">人机对战模式</option>
-            </select>
-            <select id="ai-side">
-              <option value="b">我执红（电脑黑）</option>
-              <option value="r">我执黑（电脑红）</option>
-            </select>
-          </div>
-          <label for="ai-level">电脑难度</label>
-          <select id="ai-level"></select>
-          <label for="game-select">我的对局列表（用于切换回放）</label>
-          <select id="game-select"></select>
-          <div class="row">
-            <button id="sfx-test-btn" type="button">解锁并测试音效</button>
-            <div id="sfx-status" class="mini-status">音效状态：未解锁</div>
-          </div>
-          <button id="undo-game-btn" type="button">悔棋（本局最多3次）</button>
-          <button id="end-game-btn" class="danger-button" type="button">结束当前对局</button>
-          <div class="row replay-row">
-            <button id="first-ply-btn" type="button">|&lt;</button>
-            <button id="prev-ply-btn" type="button">&lt;</button>
-            <button id="next-ply-btn" type="button">&gt;</button>
-            <button id="last-ply-btn" type="button">&gt;|</button>
-          </div>
-          <div id="board-status" class="panel"></div>
-          <div class="xiangqi-board" aria-label="中国象棋棋盘">
+            <div class="page-head">
+              <div>
+                <p class="eyebrow">Practice</p>
+                <h2>人机对战 / 棋局回放</h2>
+                <p class="page-note">录入、走棋、悔棋、分析和回放都集中在这一页。</p>
+              </div>
+            </div>
+            <div class="stack">
+              <section id="game-setup-panel" class="surface-card stack">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Setup</p>
+                    <h3>对局设置</h3>
+                  </div>
+                </div>
+                <div class="row">
+                  <input id="game-name" placeholder="新对局名称（可选）" />
+                  <select id="game-mode">
+                    <option value="practice">练习模式（手动双边录入）</option>
+                    <option value="ai">人机对战模式</option>
+                  </select>
+                </div>
+                <div class="row">
+                  <select id="ai-side">
+                    <option value="b">我执红（电脑黑）</option>
+                    <option value="r">我执黑（电脑红）</option>
+                  </select>
+                  <select id="ai-level"></select>
+                </div>
+                <button id="create-game-btn" type="button">新建对局</button>
+                <div class="stack">
+                  <label for="game-select">历史对局 / 回放</label>
+                  <select id="game-select"></select>
+                </div>
+              </section>
+
+              <section id="game-live-panel" class="stack">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Current Game</p>
+                    <h3 id="game-active-title">当前对局</h3>
+                    <p id="game-active-subtitle" class="page-note">开始一盘新棋，或从历史对局进入回放。</p>
+                  </div>
+                </div>
+                <div class="row action-row">
+                  <button id="undo-game-btn" type="button">悔棋（本局最多3次）</button>
+                  <button id="end-game-btn" class="danger-button" type="button">结束当前对局</button>
+                </div>
+                <div class="row replay-row">
+                  <button id="first-ply-btn" type="button">|&lt;</button>
+                  <button id="prev-ply-btn" type="button">&lt;</button>
+                  <button id="next-ply-btn" type="button">&gt;</button>
+                  <button id="last-ply-btn" type="button">&gt;|</button>
+                </div>
+                <div id="board-status" class="panel"></div>
+                <div class="xiangqi-board" aria-label="中国象棋棋盘">
             <div class="file-label file-label-top">
               <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
             </div>
@@ -306,9 +322,10 @@
             <div class="file-label file-label-bottom">
               <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
             </div>
-          </div>
-          <div id="move-list" class="panel"></div>
-        </div>
+                </div>
+                <div id="move-list" class="panel"></div>
+              </section>
+            </div>
           </div>
         </section>
 
