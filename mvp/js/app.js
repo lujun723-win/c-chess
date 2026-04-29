@@ -923,6 +923,7 @@ function renderBoard() {
         const code = snap.board[row][col];
         const cell = document.createElement("button");
         cell.type = "button";
+        cell.tabIndex = -1;
         cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
         cell.style.left = pointLeftPercent(col);
         cell.style.top = pointTopPercent(row);
@@ -1001,6 +1002,7 @@ function renderBattleBoard() {
         const code = snap.board[row][col];
         const cell = document.createElement("button");
         cell.type = "button";
+        cell.tabIndex = -1;
         cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
         cell.style.left = pointLeftPercent(col);
         cell.style.top = pointTopPercent(row);
