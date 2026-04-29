@@ -587,6 +587,8 @@ hr {
   position: absolute;
   width: 36px;
   height: 36px;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid transparent;
   border-radius: 50%;
   background: transparent;
@@ -601,6 +603,10 @@ hr {
   padding: 0;
   transform: translate(-50%, -50%);
   pointer-events: auto;
+}
+
+.cell:hover {
+  transform: translate(-50%, -50%);
 }
 
 .cell.empty {
