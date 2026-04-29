@@ -934,7 +934,11 @@ function renderBoard() {
           cell.classList.add("checked-king");
         }
         cell.textContent = code ? pieceLabel(code) : "";
-        cell.addEventListener("click", () => onBoardCellClick(row, col, code, snap));
+        cell.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          cell.blur();
+          onBoardCellClick(row, col, code, snap);
+        });
         boardEl.appendChild(cell);
       }
     }
@@ -1017,7 +1021,11 @@ function renderBattleBoard() {
           cell.classList.add("checked-king");
         }
         cell.textContent = code ? pieceLabel(code) : "";
-        cell.addEventListener("click", () => onBattleCellClick(row, col, code, snap, role));
+        cell.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          cell.blur();
+          onBattleCellClick(row, col, code, snap, role);
+        });
         battleBoardEl.appendChild(cell);
       }
     }
@@ -1058,6 +1066,16 @@ function onBoardCellClick(row, col, code, snap) {
     return;
   }
   const [fromRow, fromCol] = gameState.selected;
+  if (fromRow === row && fromCol === col) {
+    gameState.selected = null;
+    renderBoard();
+    return;
+  }
+  if (code && code[0] === snap.turn) {
+    gameState.selected = [row, col];
+    renderBoard();
+    return;
+  }
   try {
     makeMove(gameState.gameId, fromRow, fromCol, row, col);
     gameState.selected = null;
@@ -1102,6 +1120,20 @@ function onBattleCellClick(row, col, code, snap, role) {
     return;
   }
   const [fromRow, fromCol] = battleState.selected;
+  if (fromRow === row && fromCol === col) {
+    battleState.selected = null;
+    renderBattleBoard();
+    return;
+  }
+  if (code && code[0] === snap.turn) {
+    if (code[0] !== role) {
+      battleStatus.textContent = "你只能操作自己一方的棋子。";
+      return;
+    }
+    battleState.selected = [row, col];
+    renderBattleBoard();
+    return;
+  }
   try {
     makeBattleMove(battleState.battleId, fromRow, fromCol, row, col);
     battleState.selected = null;
