@@ -229,101 +229,109 @@
                     <p id="game-active-subtitle" class="page-note">开始一盘新棋，或从历史对局进入回放。</p>
                   </div>
                 </div>
-                <div class="row action-row">
-                  <button id="undo-game-btn" type="button">悔棋（本局最多3次）</button>
-                  <button id="end-game-btn" class="danger-button" type="button">结束当前对局</button>
+                <div class="play-surface">
+                  <div class="board-column">
+                    <div class="row action-row">
+                      <button id="undo-game-btn" type="button">悔棋（本局最多3次）</button>
+                      <button id="end-game-btn" class="danger-button" type="button">结束当前对局</button>
+                    </div>
+                    <div class="row replay-row">
+                      <button id="first-ply-btn" type="button">|&lt;</button>
+                      <button id="prev-ply-btn" type="button">&lt;</button>
+                      <button id="next-ply-btn" type="button">&gt;</button>
+                      <button id="last-ply-btn" type="button">&gt;|</button>
+                    </div>
+                    <div class="xiangqi-board-frame">
+                      <div class="xiangqi-board" aria-label="中国象棋棋盘">
+                <div class="file-label file-label-top">
+                  <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
                 </div>
-                <div class="row replay-row">
-                  <button id="first-ply-btn" type="button">|&lt;</button>
-                  <button id="prev-ply-btn" type="button">&lt;</button>
-                  <button id="next-ply-btn" type="button">&gt;</button>
-                  <button id="last-ply-btn" type="button">&gt;|</button>
+                <div class="board-area">
+                  <svg class="board-lines" viewBox="0 0 400 444" aria-hidden="true">
+                  <defs>
+                    <g id="star-full">
+                      <path d="M -14 -6 H -6 M -6 -14 V -6 M 6 -6 H 14 M 6 -14 V -6 M -14 6 H -6 M -6 6 V 14 M 6 6 H 14 M 6 6 V 14" />
+                    </g>
+                    <g id="star-left">
+                      <path d="M -14 -6 H -6 M -6 -14 V -6 M -14 6 H -6 M -6 6 V 14" />
+                    </g>
+                    <g id="star-right">
+                      <path d="M 6 -6 H 14 M 6 -14 V -6 M 6 6 H 14 M 6 6 V 14" />
+                    </g>
+                  </defs>
+                  <g class="line">
+                    <line x1="24" y1="24" x2="376" y2="24" />
+                    <line x1="24" y1="68" x2="376" y2="68" />
+                    <line x1="24" y1="112" x2="376" y2="112" />
+                    <line x1="24" y1="156" x2="376" y2="156" />
+                    <line x1="24" y1="200" x2="376" y2="200" />
+                    <line x1="24" y1="244" x2="376" y2="244" />
+                    <line x1="24" y1="288" x2="376" y2="288" />
+                    <line x1="24" y1="332" x2="376" y2="332" />
+                    <line x1="24" y1="376" x2="376" y2="376" />
+                    <line x1="24" y1="420" x2="376" y2="420" />
+                  </g>
+                  <g class="line">
+                    <line x1="24" y1="24" x2="24" y2="420" />
+                    <line x1="68" y1="24" x2="68" y2="200" />
+                    <line x1="112" y1="24" x2="112" y2="200" />
+                    <line x1="156" y1="24" x2="156" y2="200" />
+                    <line x1="200" y1="24" x2="200" y2="200" />
+                    <line x1="244" y1="24" x2="244" y2="200" />
+                    <line x1="288" y1="24" x2="288" y2="200" />
+                    <line x1="332" y1="24" x2="332" y2="200" />
+                    <line x1="376" y1="24" x2="376" y2="420" />
+                    <line x1="68" y1="244" x2="68" y2="420" />
+                    <line x1="112" y1="244" x2="112" y2="420" />
+                    <line x1="156" y1="244" x2="156" y2="420" />
+                    <line x1="200" y1="244" x2="200" y2="420" />
+                    <line x1="244" y1="244" x2="244" y2="420" />
+                    <line x1="288" y1="244" x2="288" y2="420" />
+                    <line x1="332" y1="244" x2="332" y2="420" />
+                  </g>
+                  <g class="line">
+                    <line x1="156" y1="24" x2="244" y2="112" />
+                    <line x1="244" y1="24" x2="156" y2="112" />
+                    <line x1="156" y1="332" x2="244" y2="420" />
+                    <line x1="244" y1="332" x2="156" y2="420" />
+                  </g>
+                  <g class="mark">
+                    <use href="#star-full" x="68" y="112" />
+                    <use href="#star-full" x="332" y="112" />
+
+                    <use href="#star-right" x="24" y="156" />
+                    <use href="#star-full" x="112" y="156" />
+                    <use href="#star-full" x="200" y="156" />
+                    <use href="#star-full" x="288" y="156" />
+                    <use href="#star-left" x="376" y="156" />
+
+                    <use href="#star-right" x="24" y="288" />
+                    <use href="#star-full" x="112" y="288" />
+                    <use href="#star-full" x="200" y="288" />
+                    <use href="#star-full" x="288" y="288" />
+                    <use href="#star-left" x="376" y="288" />
+
+                    <use href="#star-full" x="68" y="332" />
+                    <use href="#star-full" x="332" y="332" />
+                  </g>
+                  </svg>
+                  <div class="river-label">
+                    <span>楚 河</span>
+                    <span>汉 界</span>
+                  </div>
+                  <div id="xiangqi-board" class="board-points"></div>
                 </div>
-                <div id="board-status" class="panel"></div>
-                <div class="xiangqi-board" aria-label="中国象棋棋盘">
-            <div class="file-label file-label-top">
-              <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
-            </div>
-            <div class="board-area">
-              <svg class="board-lines" viewBox="0 0 400 444" aria-hidden="true">
-              <defs>
-                <g id="star-full">
-                  <path d="M -14 -6 H -6 M -6 -14 V -6 M 6 -6 H 14 M 6 -14 V -6 M -14 6 H -6 M -6 6 V 14 M 6 6 H 14 M 6 6 V 14" />
-                </g>
-                <g id="star-left">
-                  <path d="M -14 -6 H -6 M -6 -14 V -6 M -14 6 H -6 M -6 6 V 14" />
-                </g>
-                <g id="star-right">
-                  <path d="M 6 -6 H 14 M 6 -14 V -6 M 6 6 H 14 M 6 6 V 14" />
-                </g>
-              </defs>
-              <g class="line">
-                <line x1="24" y1="24" x2="376" y2="24" />
-                <line x1="24" y1="68" x2="376" y2="68" />
-                <line x1="24" y1="112" x2="376" y2="112" />
-                <line x1="24" y1="156" x2="376" y2="156" />
-                <line x1="24" y1="200" x2="376" y2="200" />
-                <line x1="24" y1="244" x2="376" y2="244" />
-                <line x1="24" y1="288" x2="376" y2="288" />
-                <line x1="24" y1="332" x2="376" y2="332" />
-                <line x1="24" y1="376" x2="376" y2="376" />
-                <line x1="24" y1="420" x2="376" y2="420" />
-              </g>
-              <g class="line">
-                <line x1="24" y1="24" x2="24" y2="420" />
-                <line x1="68" y1="24" x2="68" y2="200" />
-                <line x1="112" y1="24" x2="112" y2="200" />
-                <line x1="156" y1="24" x2="156" y2="200" />
-                <line x1="200" y1="24" x2="200" y2="200" />
-                <line x1="244" y1="24" x2="244" y2="200" />
-                <line x1="288" y1="24" x2="288" y2="200" />
-                <line x1="332" y1="24" x2="332" y2="200" />
-                <line x1="376" y1="24" x2="376" y2="420" />
-                <line x1="68" y1="244" x2="68" y2="420" />
-                <line x1="112" y1="244" x2="112" y2="420" />
-                <line x1="156" y1="244" x2="156" y2="420" />
-                <line x1="200" y1="244" x2="200" y2="420" />
-                <line x1="244" y1="244" x2="244" y2="420" />
-                <line x1="288" y1="244" x2="288" y2="420" />
-                <line x1="332" y1="244" x2="332" y2="420" />
-              </g>
-              <g class="line">
-                <line x1="156" y1="24" x2="244" y2="112" />
-                <line x1="244" y1="24" x2="156" y2="112" />
-                <line x1="156" y1="332" x2="244" y2="420" />
-                <line x1="244" y1="332" x2="156" y2="420" />
-              </g>
-              <g class="mark">
-                <use href="#star-full" x="68" y="112" />
-                <use href="#star-full" x="332" y="112" />
-
-                <use href="#star-right" x="24" y="156" />
-                <use href="#star-full" x="112" y="156" />
-                <use href="#star-full" x="200" y="156" />
-                <use href="#star-full" x="288" y="156" />
-                <use href="#star-left" x="376" y="156" />
-
-                <use href="#star-right" x="24" y="288" />
-                <use href="#star-full" x="112" y="288" />
-                <use href="#star-full" x="200" y="288" />
-                <use href="#star-full" x="288" y="288" />
-                <use href="#star-left" x="376" y="288" />
-
-                <use href="#star-full" x="68" y="332" />
-                <use href="#star-full" x="332" y="332" />
-              </g>
-              </svg>
-              <div class="river-label">
-                <span>楚 河</span>
-                <span>汉 界</span>
-              </div>
-              <div id="xiangqi-board" class="board-points"></div>
-            </div>
-            <div class="file-label file-label-bottom">
-              <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
-            </div>
+                <div class="file-label file-label-bottom">
+                  <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
                 </div>
-                <div id="move-list" class="panel"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <aside class="info-column">
+                    <div id="board-status" class="panel metric-panel"></div>
+                    <div id="move-list" class="panel metric-panel"></div>
+                  </aside>
+                </div>
               </section>
             </div>
           </div>
@@ -394,16 +402,20 @@
           </section>
           <label for="battle-select">我的对战列表</label>
           <select id="battle-select"></select>
-          <button id="undo-battle-btn" type="button">悔棋（本局最多3次）</button>
-          <button id="end-battle-btn" class="danger-button" type="button">结束当前对战</button>
-          <div class="row replay-row">
-            <button id="battle-first-ply-btn" type="button">|&lt;</button>
-            <button id="battle-prev-ply-btn" type="button">&lt;</button>
-            <button id="battle-next-ply-btn" type="button">&gt;</button>
-            <button id="battle-last-ply-btn" type="button">&gt;|</button>
-          </div>
-          <div id="battle-status" class="panel"></div>
-          <div class="xiangqi-board" aria-label="中国象棋对战棋盘">
+          <div class="play-surface">
+            <div class="board-column">
+              <div class="row action-row">
+                <button id="undo-battle-btn" type="button">悔棋（本局最多3次）</button>
+                <button id="end-battle-btn" class="danger-button" type="button">结束当前对战</button>
+              </div>
+              <div class="row replay-row">
+                <button id="battle-first-ply-btn" type="button">|&lt;</button>
+                <button id="battle-prev-ply-btn" type="button">&lt;</button>
+                <button id="battle-next-ply-btn" type="button">&gt;</button>
+                <button id="battle-last-ply-btn" type="button">&gt;|</button>
+              </div>
+              <div class="xiangqi-board-frame">
+                <div class="xiangqi-board" aria-label="中国象棋对战棋盘">
             <div class="file-label file-label-top">
               <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
             </div>
@@ -485,10 +497,16 @@
             <div class="file-label file-label-bottom">
               <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
             </div>
+                </div>
+              </div>
+            </div>
+            <aside class="info-column">
+              <div id="battle-status" class="panel metric-panel"></div>
+              <div id="battle-move-list" class="panel metric-panel"></div>
+            </aside>
           </div>
-          <div id="battle-move-list" class="panel"></div>
         </div>
-          </div>
+      </div>
         </section>
       </div>
     </main>

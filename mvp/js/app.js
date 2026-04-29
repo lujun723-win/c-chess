@@ -123,6 +123,11 @@ const reviewState = {
   gameId: null,
 };
 
+const renderCache = {
+  gameBoardKey: "",
+  battleBoardKey: "",
+};
+
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
 const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
 const AI_SYNC_INTERVAL_ACTIVE_MS = 600;
@@ -147,6 +152,33 @@ function pointLeftPercent(col) {
 
 function pointTopPercent(row) {
   return `${(row / 9) * 100}%`;
+}
+
+function boardMatrixKey(board) {
+  return (board || [])
+    .map((row) => row.join(","))
+    .join("|");
+}
+
+function selectedPointKey(selected) {
+  return Array.isArray(selected) ? selected.join(",") : "";
+}
+
+function gameBoardRenderKey(snap) {
+  return [
+    boardMatrixKey(snap.board),
+    snap.checkedSide || "",
+    selectedPointKey(gameState.selected),
+    snap.mode === "ai" && snap.aiThinking ? snap.turn : "",
+  ].join("::");
+}
+
+function battleBoardRenderKey(snap) {
+  return [
+    boardMatrixKey(snap.board),
+    snap.checkedSide || "",
+    selectedPointKey(battleState.selected),
+  ].join("::");
 }
 
 function createFxNode(className, row, col, text = "") {
@@ -880,6 +912,7 @@ function renderBattleRoomOptions() {
 function renderBoard() {
   const user = getCurrentUser();
   if (!user || !gameState.gameId) {
+    renderCache.gameBoardKey = "";
     boardEl.innerHTML = "";
     boardStatus.textContent = "请先新建对局，或从历史对局进入回放。";
     undoGameBtn.disabled = true;
@@ -917,37 +950,45 @@ function renderBoard() {
     boardStatus.textContent = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
     }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${undoLine}${checkLine}${assessLine}`;
-    boardEl.innerHTML = "";
-    for (let row = 0; row < 10; row += 1) {
-      for (let col = 0; col < 9; col += 1) {
-        const code = snap.board[row][col];
-        const cell = document.createElement("button");
-        cell.type = "button";
-        cell.tabIndex = -1;
-        cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
-        cell.style.left = pointLeftPercent(col);
-        cell.style.top = pointTopPercent(row);
-        if (gameState.selected && gameState.selected[0] === row && gameState.selected[1] === col) {
-          cell.classList.add("selected");
+    const boardKey = gameBoardRenderKey(snap);
+    if (renderCache.gameBoardKey !== boardKey) {
+      renderCache.gameBoardKey = boardKey;
+      boardEl.innerHTML = "";
+      for (let row = 0; row < 10; row += 1) {
+        for (let col = 0; col < 9; col += 1) {
+          const code = snap.board[row][col];
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.tabIndex = -1;
+          cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
+          cell.style.left = pointLeftPercent(col);
+          cell.style.top = pointTopPercent(row);
+          if (
+            gameState.selected &&
+            gameState.selected[0] === row &&
+            gameState.selected[1] === col
+          ) {
+            cell.classList.add("selected");
+          }
+          if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
+            cell.classList.add("checked-king");
+          }
+          cell.textContent = code ? pieceLabel(code) : "";
+          cell.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            cell.blur();
+            onBoardCellClick(row, col, code, snap);
+          });
+          boardEl.appendChild(cell);
         }
-        if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
-          cell.classList.add("checked-king");
-        }
-        cell.textContent = code ? pieceLabel(code) : "";
-        cell.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          cell.blur();
-          onBoardCellClick(row, col, code, snap);
-        });
-        boardEl.appendChild(cell);
       }
-    }
-    if (snap.mode === "ai" && snap.aiThinking) {
-      const kingPoint = findPiecePoint(snap.board, `${snap.turn}K`);
-      if (kingPoint) {
-        const [kingRow, kingCol] = kingPoint;
-        const bubble = createFxNode("thinking-bubble", kingRow, kingCol, "思考中");
-        boardEl.appendChild(bubble);
+      if (snap.mode === "ai" && snap.aiThinking) {
+        const kingPoint = findPiecePoint(snap.board, `${snap.turn}K`);
+        if (kingPoint) {
+          const [kingRow, kingCol] = kingPoint;
+          const bubble = createFxNode("thinking-bubble", kingRow, kingCol, "思考中");
+          boardEl.appendChild(bubble);
+        }
       }
     }
     maybeAnimateLatestMove("game", game.id, snap, boardEl);
@@ -957,6 +998,7 @@ function renderBoard() {
     lastPlyBtn.disabled = snap.index === snap.max;
     undoGameBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
   } catch (err) {
+    renderCache.gameBoardKey = "";
     boardStatus.textContent = err.message;
     undoGameBtn.disabled = true;
     renderMoveList();
@@ -972,6 +1014,7 @@ function renderBattleBoard() {
   const user = getCurrentUser();
   if (!user || !battleState.battleId) {
     battleBoardEl.innerHTML = "";
+    renderCache.battleBoardKey = "";
     battleStatus.textContent = "请登录并创建/加入对战。";
     undoBattleBtn.disabled = true;
     renderBattleMoveList();
@@ -1000,33 +1043,37 @@ function renderBattleBoard() {
       snap.turn === "r" ? "红方" : "黑方"
     }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${undoText}${checkText}${assessText}`;
 
-    battleBoardEl.innerHTML = "";
-    for (let row = 0; row < 10; row += 1) {
-      for (let col = 0; col < 9; col += 1) {
-        const code = snap.board[row][col];
-        const cell = document.createElement("button");
-        cell.type = "button";
-        cell.tabIndex = -1;
-        cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
-        cell.style.left = pointLeftPercent(col);
-        cell.style.top = pointTopPercent(row);
-        if (
-          battleState.selected &&
-          battleState.selected[0] === row &&
-          battleState.selected[1] === col
-        ) {
-          cell.classList.add("selected");
+    const boardKey = battleBoardRenderKey(snap);
+    if (renderCache.battleBoardKey !== boardKey) {
+      renderCache.battleBoardKey = boardKey;
+      battleBoardEl.innerHTML = "";
+      for (let row = 0; row < 10; row += 1) {
+        for (let col = 0; col < 9; col += 1) {
+          const code = snap.board[row][col];
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.tabIndex = -1;
+          cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
+          cell.style.left = pointLeftPercent(col);
+          cell.style.top = pointTopPercent(row);
+          if (
+            battleState.selected &&
+            battleState.selected[0] === row &&
+            battleState.selected[1] === col
+          ) {
+            cell.classList.add("selected");
+          }
+          if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
+            cell.classList.add("checked-king");
+          }
+          cell.textContent = code ? pieceLabel(code) : "";
+          cell.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            cell.blur();
+            onBattleCellClick(row, col, code, snap, role);
+          });
+          battleBoardEl.appendChild(cell);
         }
-        if (code && snap.checkedSide && code === `${snap.checkedSide}K`) {
-          cell.classList.add("checked-king");
-        }
-        cell.textContent = code ? pieceLabel(code) : "";
-        cell.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          cell.blur();
-          onBattleCellClick(row, col, code, snap, role);
-        });
-        battleBoardEl.appendChild(cell);
       }
     }
     maybeAnimateLatestMove("battle", battle.id, snap, battleBoardEl);
@@ -1037,6 +1084,7 @@ function renderBattleBoard() {
     battleLastPlyBtn.disabled = snap.index === snap.max;
     undoBattleBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
   } catch (err) {
+    renderCache.battleBoardKey = "";
     battleStatus.textContent = err.message;
     battleBoardEl.innerHTML = "";
     undoBattleBtn.disabled = true;
