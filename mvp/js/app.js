@@ -128,15 +128,13 @@ const renderCache = {
   battleBoardKey: "",
 };
 
-const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 1200;
-const BATTLE_SYNC_INTERVAL_IDLE_MS = 4000;
-const AI_SYNC_INTERVAL_ACTIVE_MS = 600;
-const AI_SYNC_INTERVAL_IDLE_MS = 1200;
+const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
+const BATTLE_SYNC_INTERVAL_IDLE_MS = 20000;
 let battleSyncTimer = null;
-let aiSyncTimer = null;
+let aiWakeTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
-const MOVE_FX_DURATION_MS = 1000;
+const MOVE_FX_DURATION_MS = 360;
 const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
 let sfxUnlocked = false;
@@ -188,6 +186,10 @@ function createFxNode(className, row, col, text = "") {
   node.style.top = pointTopPercent(row);
   if (text) node.textContent = text;
   return node;
+}
+
+function findCellNode(boardPointsEl, row, col) {
+  return boardPointsEl?.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`) || null;
 }
 
 function findPiecePoint(board, pieceCode) {
@@ -388,6 +390,8 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
   if (!boardPointsEl || !move) return;
   const [fromRow, fromCol] = move.from;
   const [toRow, toCol] = move.to;
+  const toCell = findCellNode(boardPointsEl, toRow, toCol);
+  if (toCell) toCell.classList.add("anim-hidden");
   const ghost = createFxNode(
     `move-ghost ${move.piece?.[0] === "r" ? "red" : "black"}`,
     fromRow,
@@ -400,7 +404,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
     ghost.style.left = pointLeftPercent(toCol);
     ghost.style.top = pointTopPercent(toRow);
   });
-  const impactDelayMs = Math.max(760, MOVE_FX_DURATION_MS - 220);
+  const impactDelayMs = Math.max(130, MOVE_FX_DURATION_MS - 120);
   if (move.captured) {
     playCaptureSfx(impactDelayMs);
   } else {
@@ -408,6 +412,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
   }
   setTimeout(() => {
     ghost.remove();
+    toCell?.classList.remove("anim-hidden");
   }, MOVE_FX_DURATION_MS + 140);
 
   if (move.captured) {
@@ -429,7 +434,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
       setTimeout(() => flash.remove(), 420);
       showCheckCallout(boardPointsEl);
       playCheckSfx();
-    }, Math.max(780, MOVE_FX_DURATION_MS - 200));
+    }, Math.max(150, MOVE_FX_DURATION_MS - 120));
   }
 }
 
@@ -912,6 +917,7 @@ function renderBattleRoomOptions() {
 function renderBoard() {
   const user = getCurrentUser();
   if (!user || !gameState.gameId) {
+    clearAiWakeTimer();
     renderCache.gameBoardKey = "";
     boardEl.innerHTML = "";
     boardStatus.textContent = "请先新建对局，或从历史对局进入回放。";
@@ -936,6 +942,12 @@ function renderBoard() {
       if (snap.aiThinking) {
         const secs = Math.max(0.1, snap.aiThinkMsLeft / 1000).toFixed(1);
         modeLine += `\n电脑思考中…（约 ${secs}s）`;
+        if (snap.turn === snap.aiSide) {
+          scheduleAiWake(snap.aiThinkMsLeft + 35);
+        }
+      }
+      if (!snap.aiThinking && snap.turn !== snap.aiSide) {
+        clearAiWakeTimer();
       }
     }
     const endLine =
@@ -960,6 +972,8 @@ function renderBoard() {
           const cell = document.createElement("button");
           cell.type = "button";
           cell.tabIndex = -1;
+          cell.dataset.row = String(row);
+          cell.dataset.col = String(col);
           cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
           cell.style.left = pointLeftPercent(col);
           cell.style.top = pointTopPercent(row);
@@ -1053,6 +1067,8 @@ function renderBattleBoard() {
           const cell = document.createElement("button");
           cell.type = "button";
           cell.tabIndex = -1;
+          cell.dataset.row = String(row);
+          cell.dataset.col = String(col);
           cell.className = `cell ${code ? (code[0] === "r" ? "red" : "black") : "empty"}`;
           cell.style.left = pointLeftPercent(col);
           cell.style.top = pointTopPercent(row);
@@ -1350,6 +1366,20 @@ function renderAll() {
   permissionResult.textContent = "";
 }
 
+function clearAiWakeTimer() {
+  if (!aiWakeTimer) return;
+  clearTimeout(aiWakeTimer);
+  aiWakeTimer = null;
+}
+
+function scheduleAiWake(ms) {
+  clearAiWakeTimer();
+  aiWakeTimer = setTimeout(() => {
+    aiWakeTimer = null;
+    syncAiIfNeeded({ forceRender: true });
+  }, Math.max(20, ms));
+}
+
 function syncBattleIfNeeded() {
   if (!battleState.battleId) return;
   const user = getCurrentUser();
@@ -1361,24 +1391,42 @@ function syncBattleIfNeeded() {
   renderBattleBoard();
 }
 
-function syncAiIfNeeded() {
+function syncAiIfNeeded({ forceRender = false } = {}) {
   if (!gameState.gameId) return;
   const user = getCurrentUser();
   if (!user) return;
   try {
     const game = getGame(gameState.gameId);
-    if (game.mode !== "ai" || game.status !== "active") return;
+    if (game.mode !== "ai" || game.status !== "active") {
+      clearAiWakeTimer();
+      return;
+    }
     let movedOrThinking = false;
+    let pendingThinkMs = 0;
     if (game.turn === game.aiSide) {
       const res = runAiTurnIfReady(gameState.gameId);
       movedOrThinking = Boolean(res.moved || res.aiThinking);
+      if (res.aiThinking) {
+        try {
+          const snap = getSnapshot(gameState.gameId, Number.MAX_SAFE_INTEGER);
+          pendingThinkMs = Math.max(40, snap.aiThinkMsLeft + 40);
+        } catch (_err) {
+          pendingThinkMs = 220;
+        }
+      }
     }
-    if (movedOrThinking || gameState.followLatest) {
+    if (movedOrThinking || forceRender) {
       renderGameList();
       renderBoard();
     }
+    if (pendingThinkMs > 0) {
+      scheduleAiWake(pendingThinkMs);
+    } else {
+      clearAiWakeTimer();
+    }
   } catch (_err) {
     // Keep UI loop resilient.
+    clearAiWakeTimer();
   }
 }
 
@@ -1428,6 +1476,7 @@ function restartBattleAutoSyncLoop() {
   }
   const interval = document.hidden ? BATTLE_SYNC_INTERVAL_IDLE_MS : BATTLE_SYNC_INTERVAL_ACTIVE_MS;
   battleSyncTimer = setInterval(() => {
+    if (battleEventsSource && battleEventsSource.readyState === EventSource.OPEN) return;
     try {
       syncBattleIfNeeded();
     } catch (_err) {
@@ -1437,14 +1486,11 @@ function restartBattleAutoSyncLoop() {
 }
 
 function restartAiAutoSyncLoop() {
-  if (aiSyncTimer) {
-    clearInterval(aiSyncTimer);
-    aiSyncTimer = null;
+  if (document.hidden) {
+    clearAiWakeTimer();
+    return;
   }
-  const interval = document.hidden ? AI_SYNC_INTERVAL_IDLE_MS : AI_SYNC_INTERVAL_ACTIVE_MS;
-  aiSyncTimer = setInterval(() => {
-    syncAiIfNeeded();
-  }, interval);
+  syncAiIfNeeded({ forceRender: false });
 }
 
 function setupGameModeControls() {
@@ -1816,13 +1862,13 @@ document.addEventListener("visibilitychange", () => {
     restartBattleRealtimeChannel();
   }
   if (!document.hidden) {
-    syncAiIfNeeded();
+    syncAiIfNeeded({ forceRender: true });
     syncBattleIfNeeded();
   }
 });
 
 window.addEventListener("focus", () => {
-  syncAiIfNeeded();
+  syncAiIfNeeded({ forceRender: true });
   syncBattleIfNeeded();
 });
 
