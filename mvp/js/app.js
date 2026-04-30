@@ -118,6 +118,7 @@ const quickGoReviewBtn = document.getElementById("quick-go-review");
 const quickGoFamilyBtn = document.getElementById("quick-go-family");
 const pageViews = Array.from(document.querySelectorAll(".page-view"));
 const gamePageView = document.getElementById("game-card");
+const gameHudEl = document.querySelector("#game-live-panel .game-hud");
 
 const gameState = {
   gameId: null,
@@ -269,8 +270,14 @@ function formatHintDetail(assessment, latestMoveNotation = "") {
 function updateGamePanelVisibility(hasActiveGame) {
   const showSetup = !hasActiveGame || uiState.showSetupInGame;
   if (gameSetupPanel) gameSetupPanel.hidden = !showSetup;
-  if (hintCardEl) hintCardEl.hidden = !uiState.showHintCard;
-  if (moveDrawerEl) moveDrawerEl.hidden = !uiState.showMoveDrawer;
+  if (hintCardEl) {
+    hintCardEl.hidden = !uiState.showHintCard;
+    hintCardEl.style.display = uiState.showHintCard ? "block" : "none";
+  }
+  if (moveDrawerEl) {
+    moveDrawerEl.hidden = !uiState.showMoveDrawer;
+    moveDrawerEl.style.display = uiState.showMoveDrawer ? "grid" : "none";
+  }
   if (toggleSetupBtn) {
     toggleSetupBtn.disabled = !hasActiveGame;
     toggleSetupBtn.textContent = showSetup ? "收起设置" : "设置";
@@ -280,6 +287,13 @@ function updateGamePanelVisibility(hasActiveGame) {
   }
   if (toggleMoveDrawerBtn) {
     toggleMoveDrawerBtn.textContent = uiState.showMoveDrawer ? "收起棋谱" : "棋谱";
+  }
+}
+
+function mountHintCardNearHud() {
+  if (!hintCardEl || !gameHudEl) return;
+  if (hintCardEl.parentElement !== gameHudEl) {
+    gameHudEl.appendChild(hintCardEl);
   }
 }
 
@@ -2138,6 +2152,7 @@ window.addEventListener("pageshow", () => {
 
 setupGameModeControls();
 setupNavigation();
+mountHintCardNearHud();
 renderAll();
 activateView(window.location.hash?.slice(1) || "home-card", { updateHash: false });
 restartAiAutoSyncLoop();
