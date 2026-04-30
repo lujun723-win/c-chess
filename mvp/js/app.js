@@ -706,9 +706,7 @@ function refreshIcons() {
 }
 
 function shouldLockBoardView(viewId) {
-  if (viewId === "battle-card") return true;
-  if (viewId !== "game-card") return false;
-  return Boolean(gameSetupPanel?.hidden);
+  return false;
 }
 
 function updateBoardViewLock(viewId) {
