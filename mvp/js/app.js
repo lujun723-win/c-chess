@@ -60,6 +60,17 @@ const gameActiveSubtitle = document.getElementById("game-active-subtitle");
 const boardStatus = document.getElementById("board-status");
 const boardEl = document.getElementById("xiangqi-board");
 const moveListEl = document.getElementById("move-list");
+const gameCoreMetaEl = document.getElementById("game-core-meta");
+const trendMarkerEl = document.getElementById("game-trend-marker");
+const trendValueEl = document.getElementById("game-trend-value");
+const trendBadgeEl = document.getElementById("game-trend-badge");
+const moveDrawerEl = document.getElementById("move-drawer");
+const toggleMoveDrawerBtn = document.getElementById("toggle-move-drawer-btn");
+const closeMoveDrawerBtn = document.getElementById("close-move-drawer-btn");
+const toggleHintBtn = document.getElementById("toggle-hint-btn");
+const hintCardEl = document.getElementById("hint-card");
+const hintContentEl = document.getElementById("hint-content");
+const toggleSetupBtn = document.getElementById("toggle-setup-btn");
 const reviewResultEl = document.getElementById("review-result");
 const reviewGameSelect = document.getElementById("review-game-select");
 const reviewBoardEl = document.getElementById("review-board-points");
@@ -106,6 +117,7 @@ const quickGoBattleBtn = document.getElementById("quick-go-battle");
 const quickGoReviewBtn = document.getElementById("quick-go-review");
 const quickGoFamilyBtn = document.getElementById("quick-go-family");
 const pageViews = Array.from(document.querySelectorAll(".page-view"));
+const gamePageView = document.getElementById("game-card");
 
 const gameState = {
   gameId: null,
@@ -130,6 +142,12 @@ const renderCache = {
   battleBoardKey: "",
   reviewBoardKey: "",
 };
+const uiState = {
+  showMoveDrawer: false,
+  showHintCard: false,
+  showSetupInGame: false,
+  trendBias: 0,
+};
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
 const BATTLE_SYNC_INTERVAL_IDLE_MS = 20000;
@@ -137,6 +155,7 @@ let battleSyncTimer = null;
 let aiWakeTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
+let trendBadgeTimer = null;
 const MOVE_FX_DURATION_MS = 360;
 const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
@@ -159,6 +178,109 @@ function boardMatrixKey(board) {
   return (board || [])
     .map((row) => row.join(","))
     .join("|");
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function trendMaterialBias(board) {
+  if (!Array.isArray(board)) return 0;
+  const values = { R: 9, N: 4, C: 4, B: 2, A: 2, P: 1 };
+  let red = 0;
+  let black = 0;
+  for (let row = 0; row < 10; row += 1) {
+    for (let col = 0; col < 9; col += 1) {
+      const p = board[row]?.[col];
+      if (!p) continue;
+      const v = values[p[1]] || 0;
+      if (p[0] === "r") red += v;
+      else if (p[0] === "b") black += v;
+    }
+  }
+  return red - black;
+}
+
+function setTrendBadge(text, tone = "warn", ms = 1900) {
+  if (!trendBadgeEl || !text) return;
+  trendBadgeEl.textContent = text;
+  trendBadgeEl.dataset.tone = tone;
+  trendBadgeEl.hidden = false;
+  if (trendBadgeTimer) clearTimeout(trendBadgeTimer);
+  trendBadgeTimer = setTimeout(() => {
+    trendBadgeEl.hidden = true;
+  }, ms);
+}
+
+function renderTrendBar(snap) {
+  if (!trendMarkerEl || !trendValueEl || !snap) return;
+  const base = trendMaterialBias(snap.board);
+  let swing = 0;
+  const assessment = snap.latestAssessment;
+  if (assessment && snap.latestMove && Number.isFinite(Number(assessment.scoreGap))) {
+    const mover = snap.latestMove.side;
+    const gap = Number(assessment.scoreGap || 0);
+    swing = (mover === "r" ? -1 : 1) * gap;
+    if (assessment.quality === "mistake" && gap >= 2.2) {
+      setTrendBadge(`${mover === "r" ? "红方" : "黑方"}失误`, "warn");
+    } else if (assessment.quality === "best" && gap <= 0.12) {
+      setTrendBadge(`${mover === "r" ? "红方" : "黑方"}妙手`, "praise");
+    }
+  }
+  const target = clamp((base + swing) / 14, -1, 1);
+  uiState.trendBias = uiState.trendBias * 0.62 + target * 0.38;
+  trendMarkerEl.style.left = `${((uiState.trendBias + 1) / 2) * 100}%`;
+  const absBias = Math.abs(uiState.trendBias);
+  if (absBias < 0.07) {
+    trendValueEl.textContent = "均势";
+  } else {
+    const side = uiState.trendBias < 0 ? "红优" : "黑优";
+    trendValueEl.textContent = `${side} ${Math.round(absBias * 100)}%`;
+  }
+}
+
+function formatHintDetail(assessment, latestMoveNotation = "") {
+  if (!assessment) return "暂无提示";
+  const lines = [];
+  if (assessment.bestMoveNotation) lines.push(`参考最优：${assessment.bestMoveNotation}`);
+  if (assessment.threePly) {
+    const lineText = assessment.threePly.line?.length
+      ? assessment.threePly.line.join(" -> ")
+      : "无有效主线";
+    lines.push(`三步预演：${lineText}`);
+    lines.push(
+      `局势影响：${
+        assessment.threePly.netSwing > 0
+          ? `对你有利 +${assessment.threePly.netSwing.toFixed(2)}`
+          : `对你不利 ${assessment.threePly.netSwing.toFixed(2)}`
+      }`,
+    );
+  }
+  if (latestMoveNotation && assessment.bestMoveNotation) {
+    lines.push(
+      latestMoveNotation === assessment.bestMoveNotation
+        ? "对比：这步就是参考最优。"
+        : `对比：你走了「${latestMoveNotation}」，推荐是「${assessment.bestMoveNotation}」。`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function updateGamePanelVisibility(hasActiveGame) {
+  const showSetup = !hasActiveGame || uiState.showSetupInGame;
+  if (gameSetupPanel) gameSetupPanel.hidden = !showSetup;
+  if (hintCardEl) hintCardEl.hidden = !uiState.showHintCard;
+  if (moveDrawerEl) moveDrawerEl.hidden = !uiState.showMoveDrawer;
+  if (toggleSetupBtn) {
+    toggleSetupBtn.disabled = !hasActiveGame;
+    toggleSetupBtn.textContent = showSetup ? "收起设置" : "设置";
+  }
+  if (toggleHintBtn) {
+    toggleHintBtn.textContent = uiState.showHintCard ? "隐藏提示" : "电脑提示";
+  }
+  if (toggleMoveDrawerBtn) {
+    toggleMoveDrawerBtn.textContent = uiState.showMoveDrawer ? "收起棋谱" : "棋谱";
+  }
 }
 
 function selectedPointKey(selected) {
@@ -649,19 +771,22 @@ function renderGameWorkspace() {
   const activeViewId = document.querySelector(".page-view.is-active")?.id || "";
   const user = getCurrentUser();
   if (!user || !gameState.gameId) {
-    gameSetupPanel.hidden = false;
+    gamePageView?.classList.remove("immersive");
+    uiState.showSetupInGame = false;
     gameLivePanel.classList.remove("live-focused");
     if (gameActiveTitle) gameActiveTitle.textContent = "当前对局";
     if (gameActiveSubtitle) {
       gameActiveSubtitle.textContent = "开始一盘新棋，或从历史对局进入回放。";
     }
+    if (gameCoreMetaEl) gameCoreMetaEl.textContent = "未进入对局";
+    updateGamePanelVisibility(false);
     updateBoardViewLock(activeViewId);
     return;
   }
   try {
     const game = getGame(gameState.gameId);
     const isActiveGame = (game.status || "active") === "active";
-    gameSetupPanel.hidden = isActiveGame;
+    gamePageView?.classList.toggle("immersive", isActiveGame);
     gameLivePanel.classList.toggle("live-focused", isActiveGame);
     if (gameActiveTitle) gameActiveTitle.textContent = game.name || "当前对局";
     if (gameActiveSubtitle) {
@@ -669,9 +794,11 @@ function renderGameWorkspace() {
       const statusText = game.status === "finished" ? "已结束，可回放与复盘。" : "对局进行中。";
       gameActiveSubtitle.textContent = `${modeText} · ${statusText}`;
     }
+    updateGamePanelVisibility(isActiveGame);
     updateBoardViewLock(activeViewId);
   } catch (_err) {
-    gameSetupPanel.hidden = false;
+    gamePageView?.classList.remove("immersive");
+    updateGamePanelVisibility(false);
     gameLivePanel.classList.remove("live-focused");
     updateBoardViewLock(activeViewId);
   }
@@ -965,15 +1092,15 @@ function renderBoard() {
     const targetPly = gameState.followLatest ? Number.MAX_SAFE_INTEGER : gameState.ply;
     const snap = getSnapshot(gameState.gameId, targetPly);
     gameState.ply = snap.index;
-    let modeLine = `模式：${gameModeText(snap.mode)}`;
+    let modeLine = `模式:${gameModeText(snap.mode)}`;
     if (snap.mode === "ai") {
       const mySide = snap.aiSide === "r" ? "黑方" : "红方";
-      modeLine += `（你执${mySide}，电脑${sideText(snap.aiSide)}，难度：${
+      modeLine += `（你执${mySide} / 电脑${sideText(snap.aiSide)} / 难度:${
         game.aiLevel || "normal"
       }）`;
       if (snap.aiThinking) {
         const secs = Math.max(0.1, snap.aiThinkMsLeft / 1000).toFixed(1);
-        modeLine += `\n电脑思考中…（约 ${secs}s）`;
+        modeLine += ` · 电脑思考中 ${secs}s`;
         if (snap.turn === snap.aiSide) {
           scheduleAiWake(snap.aiThinkMsLeft + 35);
         }
@@ -986,14 +1113,24 @@ function renderBoard() {
       snap.status === "finished"
         ? `\n结果：${snap.winnerSide ? `${sideText(snap.winnerSide)}胜` : "手动结束"}`
         : "";
-    const assessLine = snap.latestAssessment
-      ? `\n最近一步评估：\n${formatAssessment(snap.latestAssessment, snap.latestMoveNotation)}`
-      : "";
-    const undoLine = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
-    const checkLine = snap.inCheck ? `\n警告：${sideText(snap.checkedSide)}正在被将军。` : "";
-    boardStatus.textContent = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
+    const undoLine = `悔棋 ${snap.undoUsed}/${snap.undoLimit}`;
+    const checkLine = snap.inCheck ? ` · ${sideText(snap.checkedSide)}被将` : "";
+    const turnLine = `第${snap.index}手/共${snap.max}手 · ${snap.turn === "r" ? "红方" : "黑方"}走子${
+      snap.index < snap.max ? "（回放）" : ""
+    }`;
+    boardStatus.textContent = `${turnLine} · ${undoLine}${checkLine}${endLine}`;
+    if (gameCoreMetaEl) {
+      gameCoreMetaEl.textContent = `${modeLine}\n${turnLine}\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
+    }
+    if (hintContentEl) {
+      hintContentEl.textContent = snap.latestAssessment
+        ? formatHintDetail(snap.latestAssessment, snap.latestMoveNotation)
+        : "暂无提示";
+    }
+    renderTrendBar(snap);
+    const statusSummary = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
-    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}${undoLine}${checkLine}${assessLine}`;
+    }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}\n${undoLine}${checkLine}`;
     const boardKey = gameBoardRenderKey(snap);
     if (renderCache.gameBoardKey !== boardKey) {
       renderCache.gameBoardKey = boardKey;
@@ -1038,9 +1175,12 @@ function renderBoard() {
     nextPlyBtn.disabled = snap.index === snap.max;
     lastPlyBtn.disabled = snap.index === snap.max;
     undoGameBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
+    boardStatus.dataset.fullText = statusSummary;
   } catch (err) {
     renderCache.gameBoardKey = "";
     boardStatus.textContent = err.message;
+    if (gameCoreMetaEl) gameCoreMetaEl.textContent = err.message;
+    if (hintContentEl) hintContentEl.textContent = "暂无提示";
     undoGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
@@ -1567,6 +1707,27 @@ function setupNavigation() {
   quickGoFamilyBtn?.addEventListener("click", () => activateView("family-card"));
 }
 
+toggleMoveDrawerBtn?.addEventListener("click", () => {
+  uiState.showMoveDrawer = !uiState.showMoveDrawer;
+  updateGamePanelVisibility(Boolean(gameState.gameId));
+});
+
+closeMoveDrawerBtn?.addEventListener("click", () => {
+  uiState.showMoveDrawer = false;
+  updateGamePanelVisibility(Boolean(gameState.gameId));
+});
+
+toggleHintBtn?.addEventListener("click", () => {
+  uiState.showHintCard = !uiState.showHintCard;
+  updateGamePanelVisibility(Boolean(gameState.gameId));
+});
+
+toggleSetupBtn?.addEventListener("click", () => {
+  if (!gameState.gameId) return;
+  uiState.showSetupInGame = !uiState.showSetupInGame;
+  updateGamePanelVisibility(true);
+});
+
 boardEl?.addEventListener("click", (event) => {
   const cell = event.target?.closest?.(".cell");
   if (!cell) return;
@@ -1720,6 +1881,9 @@ createGameBtn.addEventListener("click", () => {
     gameState.ply = Number.MAX_SAFE_INTEGER;
     gameState.followLatest = true;
     gameState.selected = null;
+    uiState.showSetupInGame = false;
+    uiState.showHintCard = false;
+    uiState.showMoveDrawer = false;
     renderAll();
   } catch (err) {
     alert(err.message);
@@ -1755,6 +1919,9 @@ endGameBtn.addEventListener("click", () => {
     gameState.ply = 0;
     gameState.followLatest = true;
     gameState.selected = null;
+    uiState.showSetupInGame = false;
+    uiState.showHintCard = false;
+    uiState.showMoveDrawer = false;
     renderAll();
     alert(keepRecord ? "已结束并保存棋谱。可在列表回放。" : "已结束且未保存，棋谱与复盘数据已删除。");
   } catch (err) {

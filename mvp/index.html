@@ -221,27 +221,43 @@
                 </div>
               </section>
 
-              <section id="game-live-panel" class="stack">
-                <div class="section-head">
+              <section id="game-live-panel" class="stack game-live-panel">
+                <div class="section-head game-live-head">
                   <div>
-                    <p class="eyebrow">Current Game</p>
                     <h3 id="game-active-title">当前对局</h3>
                     <p id="game-active-subtitle" class="page-note">开始一盘新棋，或从历史对局进入回放。</p>
                   </div>
                 </div>
-                <div class="play-surface">
-                  <div class="board-column">
-                    <div class="row action-row">
-                      <button id="undo-game-btn" type="button">悔棋（本局最多3次）</button>
-                      <button id="end-game-btn" class="danger-button" type="button">结束当前对局</button>
+                <div class="game-hud">
+                  <div id="game-core-meta" class="game-core-meta">未进入对局</div>
+                  <div class="game-hud-actions">
+                    <button id="toggle-setup-btn" class="compact-btn" type="button">设置</button>
+                    <button id="toggle-hint-btn" class="compact-btn" type="button">电脑提示</button>
+                    <button id="toggle-move-drawer-btn" class="compact-btn" type="button">棋谱</button>
+                  </div>
+                  <div class="game-trend-wrap">
+                    <span class="trend-side red">红方</span>
+                    <div class="game-trend-track">
+                      <div class="game-trend-midline"></div>
+                      <div id="game-trend-marker" class="game-trend-marker">
+                        <span id="game-trend-value" class="game-trend-value">均势</span>
+                      </div>
                     </div>
-                    <div class="row replay-row">
-                      <button id="first-ply-btn" type="button">|&lt;</button>
-                      <button id="prev-ply-btn" type="button">&lt;</button>
-                      <button id="next-ply-btn" type="button">&gt;</button>
-                      <button id="last-ply-btn" type="button">&gt;|</button>
+                    <span class="trend-side black">黑方</span>
+                    <div id="game-trend-badge" class="trend-badge" hidden></div>
+                  </div>
+                </div>
+                <div class="play-surface game-play-surface">
+                  <div class="board-column game-board-column">
+                    <div class="board-action-strip">
+                      <button id="undo-game-btn" class="compact-btn" type="button">悔棋</button>
+                      <button id="end-game-btn" class="compact-btn danger-button" type="button">结束</button>
+                      <button id="first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
+                      <button id="prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
+                      <button id="next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
+                      <button id="last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
                     </div>
-                    <div class="xiangqi-board-frame">
+                    <div class="xiangqi-board-frame game-board-frame">
                       <div class="xiangqi-board" aria-label="中国象棋棋盘">
                 <div class="file-label file-label-top">
                   <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
@@ -327,9 +343,18 @@
                       </div>
                     </div>
                   </div>
-                  <aside class="info-column">
-                    <div id="board-status" class="panel metric-panel"></div>
-                    <div id="move-list" class="panel metric-panel"></div>
+                  <aside class="info-column game-info-column">
+                    <div id="hint-card" class="panel hint-card" hidden>
+                      <div id="hint-content" class="hint-content">暂无提示</div>
+                    </div>
+                    <div id="board-status" class="panel metric-panel compact-status"></div>
+                  </aside>
+                  <aside id="move-drawer" class="move-drawer" hidden>
+                    <div class="move-drawer-head">
+                      <strong>棋谱记录</strong>
+                      <button id="close-move-drawer-btn" class="compact-btn" type="button">收起</button>
+                    </div>
+                    <div id="move-list" class="move-drawer-body">棋谱记录：暂无。</div>
                   </aside>
                 </div>
               </section>
