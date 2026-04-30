@@ -23,6 +23,7 @@ npm start
 
 ```bash
 npm run test:release-check
+npm run release:prepare
 ```
 
 ## 数据备份与恢复
@@ -35,3 +36,4 @@ npm run restore:db -- server/backups/<backup-file>.json
 详细说明：
 - [部署与发布](./docs/DEPLOYMENT.md)
 - [备份与恢复](./docs/BACKUP_RESTORE.md)
+- [首版发布清单](./docs/RELEASE_CHECKLIST.md)

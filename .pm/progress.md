@@ -58,3 +58,4 @@
 - 发布文档补齐：新增 `docs/DEPLOYMENT.md` 与 `docs/BACKUP_RESTORE.md`，根 README 增加发布前检查与备份恢复入口。
 - 异常兜底增强：前端新增走子防重复提交；双人对战 HUD 增加“实时/轮询兜底”同步状态；后端 `PUT /api/db` 增加串行写与写入限流。
 - 当前环境验证：`npm run test:release-check` 通过（`test:regression` 在旧 Node 运行时自动跳过）。
+- 首版发布流程化：新增 `docs/RELEASE_CHECKLIST.md` 与 `npm run release:prepare`（备份 + 门禁检查一键执行）。

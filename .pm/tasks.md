@@ -44,6 +44,7 @@
 - [x] 发布门禁脚本（`test:release-check`）与接口门禁用例（health/access/db/rate-limit）
 - [x] 数据备份/恢复脚本（`backup:db` / `restore:db`）与文档
 - [x] 异常兜底加强（前端重复提交防抖、实时同步降级提示、后端串行写与限流）
+- [x] 首版发布清单与一键发布准备脚本（`release:prepare`）
 - [ ] 功能验收
 - [ ] 权限与数据隔离验收
 - [ ] 视觉验收
