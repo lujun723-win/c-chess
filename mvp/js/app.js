@@ -103,6 +103,17 @@ const battleNameInput = document.getElementById("battle-name");
 const createBattleBtn = document.getElementById("create-battle-btn");
 const undoBattleBtn = document.getElementById("undo-battle-btn");
 const endBattleBtn = document.getElementById("end-battle-btn");
+const battleSetupPanel = document.getElementById("battle-setup-panel");
+const battleLivePanel = document.getElementById("battle-live-panel");
+const battleActiveTitle = document.getElementById("battle-active-title");
+const battleActiveSubtitle = document.getElementById("battle-active-subtitle");
+const battleCoreMetaEl = document.getElementById("battle-core-meta");
+const battleRecentOpponentMoveEl = document.getElementById("battle-recent-opponent-move");
+const battleRecentSelfMoveEl = document.getElementById("battle-recent-self-move");
+const toggleBattleSetupBtn = document.getElementById("toggle-battle-setup-btn");
+const battleMoveDrawerEl = document.getElementById("battle-move-drawer");
+const toggleBattleMoveDrawerBtn = document.getElementById("toggle-battle-move-drawer-btn");
+const closeBattleMoveDrawerBtn = document.getElementById("close-battle-move-drawer-btn");
 const battleRoomQueryInput = document.getElementById("battle-room-query");
 const battleRoomSelect = document.getElementById("battle-room-select");
 const joinBattleBtn = document.getElementById("join-battle-btn");
@@ -133,6 +144,7 @@ const quickGoReviewBtn = document.getElementById("quick-go-review");
 const quickGoFamilyBtn = document.getElementById("quick-go-family");
 const pageViews = Array.from(document.querySelectorAll(".page-view"));
 const gamePageView = document.getElementById("game-card");
+const battlePageView = document.getElementById("battle-card");
 const gameHudEl = document.querySelector("#game-live-panel .game-hud");
 
 const gameState = {
@@ -162,6 +174,8 @@ const renderCache = {
 };
 const uiState = {
   showMoveDrawer: false,
+  showSetupInBattle: false,
+  showBattleMoveDrawer: false,
   showHintCard: false,
   showSetupInGame: false,
   trendBias: 0,
@@ -362,6 +376,22 @@ function updateGamePanelVisibility(hasActiveGame) {
   }
   if (toggleMoveDrawerBtn) {
     toggleMoveDrawerBtn.textContent = uiState.showMoveDrawer ? "收起棋谱" : "棋谱";
+  }
+}
+
+function updateBattlePanelVisibility(hasActiveBattle) {
+  const showSetup = !hasActiveBattle || uiState.showSetupInBattle;
+  if (battleSetupPanel) battleSetupPanel.hidden = !showSetup;
+  if (battleMoveDrawerEl) {
+    battleMoveDrawerEl.hidden = !uiState.showBattleMoveDrawer;
+    battleMoveDrawerEl.style.display = uiState.showBattleMoveDrawer ? "grid" : "none";
+  }
+  if (toggleBattleSetupBtn) {
+    toggleBattleSetupBtn.disabled = !hasActiveBattle;
+    toggleBattleSetupBtn.textContent = showSetup ? "收起设置" : "设置";
+  }
+  if (toggleBattleMoveDrawerBtn) {
+    toggleBattleMoveDrawerBtn.textContent = uiState.showBattleMoveDrawer ? "收起棋谱" : "棋谱";
   }
 }
 
@@ -970,6 +1000,70 @@ function renderGameWorkspace() {
     updateGamePanelVisibility(false);
     gameLivePanel.classList.remove("live-focused");
     updateBoardViewLock(activeViewId);
+  }
+}
+
+function renderBattleRecentQueue(battle, snap, role) {
+  if (!battleRecentOpponentMoveEl || !battleRecentSelfMoveEl) return;
+  if (!battle || !snap || !Array.isArray(battle.moves) || battle.moves.length === 0) {
+    battleRecentOpponentMoveEl.textContent = "--";
+    battleRecentSelfMoveEl.textContent = "--";
+    return;
+  }
+  const maxIndex = Math.max(0, Math.min(snap.index, battle.moves.length));
+  const slice = battle.moves.slice(0, maxIndex);
+  if (!slice.length) {
+    battleRecentOpponentMoveEl.textContent = "--";
+    battleRecentSelfMoveEl.textContent = "--";
+    return;
+  }
+  let opponentText = "--";
+  let selfText = "--";
+  for (let i = slice.length - 1; i >= 0; i -= 1) {
+    const mv = slice[i];
+    const mvSide = mv.side || mv.piece?.[0] || "";
+    const text = formatMoveWithSide(mv, battle.snapshots?.[i] || null);
+    if (mvSide && mvSide !== role && opponentText === "--") {
+      opponentText = text;
+    } else if (mvSide && mvSide === role && selfText === "--") {
+      selfText = text;
+    }
+    if (opponentText !== "--" && selfText !== "--") break;
+  }
+  battleRecentOpponentMoveEl.textContent = opponentText;
+  battleRecentSelfMoveEl.textContent = selfText;
+}
+
+function renderBattleWorkspace() {
+  if (!battleSetupPanel || !battleLivePanel) return;
+  const user = getCurrentUser();
+  if (!user || !battleState.battleId) {
+    battlePageView?.classList.remove("immersive");
+    battleLivePanel.classList.remove("live-focused");
+    uiState.showSetupInBattle = false;
+    uiState.showBattleMoveDrawer = false;
+    if (battleActiveTitle) battleActiveTitle.textContent = "当前对战";
+    if (battleActiveSubtitle) battleActiveSubtitle.textContent = "创建房间，或从列表加入已有对战。";
+    if (battleCoreMetaEl) battleCoreMetaEl.textContent = "未进入对战";
+    if (battleRecentOpponentMoveEl) battleRecentOpponentMoveEl.textContent = "--";
+    if (battleRecentSelfMoveEl) battleRecentSelfMoveEl.textContent = "--";
+    updateBattlePanelVisibility(false);
+    return;
+  }
+  try {
+    const battle = getBattle(battleState.battleId);
+    const isActiveBattle = (battle.status || "waiting") !== "finished";
+    battlePageView?.classList.toggle("immersive", isActiveBattle);
+    battleLivePanel.classList.toggle("live-focused", isActiveBattle);
+    if (battleActiveTitle) battleActiveTitle.textContent = battle.name || "当前对战";
+    if (battleActiveSubtitle) {
+      battleActiveSubtitle.textContent = `双人对战 · ${battleStatusText(battle.status || "waiting")}`;
+    }
+    updateBattlePanelVisibility(isActiveBattle);
+  } catch (_err) {
+    battlePageView?.classList.remove("immersive");
+    battleLivePanel.classList.remove("live-focused");
+    updateBattlePanelVisibility(false);
   }
 }
 
@@ -1659,8 +1753,12 @@ function renderBattleBoard() {
     battleBoardEl.innerHTML = "";
     renderCache.battleBoardKey = "";
     battleStatus.textContent = "请登录并创建/加入对战。";
+    if (battleCoreMetaEl) battleCoreMetaEl.textContent = "未进入对战";
+    if (battleRecentOpponentMoveEl) battleRecentOpponentMoveEl.textContent = "--";
+    if (battleRecentSelfMoveEl) battleRecentSelfMoveEl.textContent = "--";
     undoBattleBtn.disabled = true;
     renderBattleMoveList();
+    renderBattleWorkspace();
     return;
   }
   try {
@@ -1680,11 +1778,20 @@ function renderBattleBoard() {
       : "";
     const undoText = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
     const checkText = snap.inCheck ? `\n警告：${sideText(snap.checkedSide)}正在被将军。` : "";
+    const turnLine = `第 ${snap.index} 手 / 共 ${snap.max} 手，${snap.turn === "r" ? "红方" : "黑方"}走子。`;
     battleStatus.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
       role,
     )}\n状态：${battleStatusText(snap.status)}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
     }走子。${battleState.followLatest ? myTurnText : "（回放模式）"}${winnerText}${undoText}${checkText}${assessText}`;
+    if (battleCoreMetaEl) {
+      battleCoreMetaEl.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
+        role,
+      )} · 状态：${battleStatusText(snap.status)}\n${turnLine}${battleState.followLatest ? myTurnText : "（回放模式）"}\n悔棋：已用 ${
+        snap.undoUsed
+      }/${snap.undoLimit}，剩余 ${snap.undoRemaining}${snap.inCheck ? ` · ${sideText(snap.checkedSide)}被将` : ""}`;
+    }
+    renderBattleRecentQueue(battle, snap, role);
 
     const boardKey = battleBoardRenderKey(snap);
     if (renderCache.battleBoardKey !== boardKey) {
@@ -1730,10 +1837,19 @@ function renderBattleBoard() {
     battleStatus.textContent = err.message;
     battleBoardEl.innerHTML = "";
     undoBattleBtn.disabled = true;
+    if (battleCoreMetaEl) battleCoreMetaEl.textContent = err.message;
+    if (battleRecentOpponentMoveEl) battleRecentOpponentMoveEl.textContent = "--";
+    if (battleRecentSelfMoveEl) battleRecentSelfMoveEl.textContent = "--";
     enforceIosScrollLock();
   }
   renderBattleMoveList();
   renderHomeOverview();
+  renderBattleWorkspace();
+}
+
+function setBattleTransientMessage(text) {
+  battleStatus.textContent = text;
+  if (battleCoreMetaEl) battleCoreMetaEl.textContent = text;
 }
 
 function onBoardCellClick(row, col, code, snap) {
@@ -1787,25 +1903,25 @@ function onBoardCellClick(row, col, code, snap) {
 function onBattleCellClick(row, col, code, snap, role) {
   unlockSfxFromGesture();
   if (snap.index < snap.max) {
-    battleStatus.textContent = "当前在回放模式，请先回到最后一步再继续走子。";
+    setBattleTransientMessage("当前在回放模式，请先回到最后一步再继续走子。");
     return;
   }
   if (snap.status === "waiting") {
-    battleStatus.textContent = "当前房间仍在等待对手加入。";
+    setBattleTransientMessage("当前房间仍在等待对手加入。");
     return;
   }
   if (snap.status === "finished") {
-    battleStatus.textContent = "该对战已结束，不能继续走子。";
+    setBattleTransientMessage("该对战已结束，不能继续走子。");
     return;
   }
   if (!battleState.selected) {
     if (!code) return;
     if (code[0] !== snap.turn) {
-      battleStatus.textContent = "未轮到该方走子。";
+      setBattleTransientMessage("未轮到该方走子。");
       return;
     }
     if (code[0] !== role) {
-      battleStatus.textContent = "你只能操作自己一方的棋子。";
+      setBattleTransientMessage("你只能操作自己一方的棋子。");
       return;
     }
     battleState.selected = [row, col];
@@ -1820,7 +1936,7 @@ function onBattleCellClick(row, col, code, snap, role) {
   }
   if (code && code[0] === snap.turn) {
     if (code[0] !== role) {
-      battleStatus.textContent = "你只能操作自己一方的棋子。";
+      setBattleTransientMessage("你只能操作自己一方的棋子。");
       return;
     }
     battleState.selected = [row, col];
@@ -1837,7 +1953,7 @@ function onBattleCellClick(row, col, code, snap, role) {
     renderBattleBoard();
     enforceIosScrollLock();
   } catch (err) {
-    battleStatus.textContent = err.message;
+    setBattleTransientMessage(err.message);
     battleState.selected = null;
     renderBattleBoard();
   }
@@ -1988,6 +2104,7 @@ function renderAll() {
   renderBattleRoomOptions();
   renderBattleList();
   renderBattleBoard();
+  renderBattleWorkspace();
   renderHomeOverview();
   updateReviewControls();
   refreshIcons();
@@ -2171,6 +2288,22 @@ toggleSetupBtn?.addEventListener("click", () => {
   if (!gameState.gameId) return;
   uiState.showSetupInGame = !uiState.showSetupInGame;
   updateGamePanelVisibility(true);
+});
+
+toggleBattleMoveDrawerBtn?.addEventListener("click", () => {
+  uiState.showBattleMoveDrawer = !uiState.showBattleMoveDrawer;
+  updateBattlePanelVisibility(Boolean(battleState.battleId));
+});
+
+closeBattleMoveDrawerBtn?.addEventListener("click", () => {
+  uiState.showBattleMoveDrawer = false;
+  updateBattlePanelVisibility(Boolean(battleState.battleId));
+});
+
+toggleBattleSetupBtn?.addEventListener("click", () => {
+  if (!battleState.battleId) return;
+  uiState.showSetupInBattle = !uiState.showSetupInBattle;
+  updateBattlePanelVisibility(true);
 });
 
 function getCellFromEvent(event) {
@@ -2547,6 +2680,8 @@ createBattleBtn.addEventListener("click", () => {
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
     battleState.followLatest = true;
+    uiState.showSetupInBattle = false;
+    uiState.showBattleMoveDrawer = false;
     renderAll();
     restartAiAutoSyncLoop();
   } catch (err) {
@@ -2583,6 +2718,8 @@ endBattleBtn.addEventListener("click", () => {
     battleState.ply = 0;
     battleState.selected = null;
     battleState.followLatest = true;
+    uiState.showSetupInBattle = false;
+    uiState.showBattleMoveDrawer = false;
     renderAll();
     alert(keepRecord ? "已结束并保存对战棋谱。" : "已结束且未保存，对战数据已删除。");
   } catch (err) {
@@ -2603,6 +2740,8 @@ joinBattleBtn.addEventListener("click", () => {
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.selected = null;
     battleState.followLatest = true;
+    uiState.showSetupInBattle = false;
+    uiState.showBattleMoveDrawer = false;
     renderAll();
     restartAiAutoSyncLoop();
   } catch (err) {
@@ -2615,6 +2754,8 @@ battleSelect.addEventListener("change", () => {
   battleState.ply = Number.MAX_SAFE_INTEGER;
   battleState.selected = null;
   battleState.followLatest = true;
+  uiState.showBattleMoveDrawer = false;
+  uiState.showSetupInBattle = false;
   renderBattleBoard();
 });
 

@@ -244,6 +244,14 @@ body {
   display: none;
 }
 
+#battle-card.immersive > .card > .page-head {
+  display: none;
+}
+
+#battle-card.immersive .battle-live-head {
+  display: none;
+}
+
 
 .page-head {
   display: flex;

@@ -501,45 +501,70 @@
 
         <section class="page-view board-page" id="battle-card" data-view="battle-card">
           <div class="card">
-        <div class="page-head">
-          <div>
-            <p class="eyebrow">Battle</p>
-            <h2>双人对战</h2>
-            <p class="page-note">用于家庭内双账号对弈，也支持回放和局面同步查看。</p>
-          </div>
-        </div>
-        <div class="stack">
-          <div class="row">
-            <input id="battle-name" placeholder="对战名称（可选）" />
-            <button id="create-battle-btn" type="button">创建对战房间</button>
-          </div>
-          <section class="surface-card stack">
-            <div class="section-head">
+            <div class="page-head">
               <div>
-                <p class="eyebrow">Join Room</p>
-                <h3>加入已有房间</h3>
+                <p class="eyebrow">Battle</p>
+                <h2>双人对战</h2>
+                <p class="page-note">用于家庭内双账号对弈，也支持回放和局面同步查看。</p>
               </div>
             </div>
-            <input id="battle-room-query" placeholder="搜索对战名称 / 邀请码 / 创建人" />
-            <select id="battle-room-select"></select>
-            <button id="join-battle-btn" type="button">加入所选房间</button>
-          </section>
-          <label for="battle-select">我的对战列表</label>
-          <select id="battle-select"></select>
-          <div class="play-surface">
-            <div class="board-column">
-              <div class="row action-row">
-                <button id="undo-battle-btn" type="button">悔棋（本局最多3次）</button>
-                <button id="end-battle-btn" class="danger-button" type="button">结束当前对战</button>
-              </div>
-              <div class="row replay-row">
-                <button id="battle-first-ply-btn" type="button">|&lt;</button>
-                <button id="battle-prev-ply-btn" type="button">&lt;</button>
-                <button id="battle-next-ply-btn" type="button">&gt;</button>
-                <button id="battle-last-ply-btn" type="button">&gt;|</button>
-              </div>
-              <div class="xiangqi-board-frame">
-                <div class="xiangqi-board" aria-label="中国象棋对战棋盘">
+            <div class="stack">
+              <section id="battle-setup-panel" class="surface-card stack">
+                <div class="row">
+                  <input id="battle-name" placeholder="对战名称（可选）" />
+                  <button id="create-battle-btn" type="button">创建对战房间</button>
+                </div>
+                <section class="surface-card stack">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">Join Room</p>
+                      <h3>加入已有房间</h3>
+                    </div>
+                  </div>
+                  <input id="battle-room-query" placeholder="搜索对战名称 / 邀请码 / 创建人" />
+                  <select id="battle-room-select"></select>
+                  <button id="join-battle-btn" type="button">加入所选房间</button>
+                </section>
+                <label for="battle-select">我的对战列表</label>
+                <select id="battle-select"></select>
+              </section>
+
+              <section id="battle-live-panel" class="stack game-live-panel">
+                <div class="section-head game-live-head battle-live-head">
+                  <div>
+                    <h3 id="battle-active-title">当前对战</h3>
+                    <p id="battle-active-subtitle" class="page-note">创建房间，或从列表加入已有对战。</p>
+                  </div>
+                </div>
+                <div class="game-hud">
+                  <div id="battle-core-meta" class="game-core-meta">未进入对战</div>
+                  <div class="recent-queue">
+                    <div class="recent-item">
+                      <span class="recent-label">对手上一步</span>
+                      <span id="battle-recent-opponent-move" class="recent-move">--</span>
+                    </div>
+                    <div class="recent-item">
+                      <span class="recent-label">我方上一步</span>
+                      <span id="battle-recent-self-move" class="recent-move">--</span>
+                    </div>
+                  </div>
+                  <div class="game-hud-actions">
+                    <button id="toggle-battle-setup-btn" class="compact-btn" type="button">设置</button>
+                    <button id="toggle-battle-move-drawer-btn" class="compact-btn" type="button">棋谱</button>
+                  </div>
+                </div>
+                <div class="play-surface game-play-surface">
+                  <div class="board-column game-board-column">
+                    <div class="board-action-strip">
+                      <button id="undo-battle-btn" class="compact-btn" type="button">悔棋</button>
+                      <button id="end-battle-btn" class="compact-btn danger-button" type="button">结束</button>
+                      <button id="battle-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
+                      <button id="battle-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
+                      <button id="battle-next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
+                      <button id="battle-last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
+                    </div>
+                    <div class="xiangqi-board-frame game-board-frame">
+                      <div class="xiangqi-board" aria-label="中国象棋对战棋盘">
             <div class="file-label file-label-top">
               <span style="--c: 0">1</span><span style="--c: 1">2</span><span style="--c: 2">3</span><span style="--c: 3">4</span><span style="--c: 4">5</span><span style="--c: 5">6</span><span style="--c: 6">7</span><span style="--c: 7">8</span><span style="--c: 8">9</span>
             </div>
@@ -621,16 +646,23 @@
             <div class="file-label file-label-bottom">
               <span style="--c: 0">九</span><span style="--c: 1">八</span><span style="--c: 2">七</span><span style="--c: 3">六</span><span style="--c: 4">五</span><span style="--c: 5">四</span><span style="--c: 6">三</span><span style="--c: 7">二</span><span style="--c: 8">一</span>
             </div>
+                      </div>
+                    </div>
+                  </div>
+                  <aside class="info-column game-info-column">
+                    <div id="battle-status" class="panel metric-panel compact-status"></div>
+                  </aside>
+                  <aside id="battle-move-drawer" class="move-drawer" hidden>
+                    <div class="move-drawer-head">
+                      <strong>棋谱记录</strong>
+                      <button id="close-battle-move-drawer-btn" class="compact-btn" type="button">收起</button>
+                    </div>
+                    <div id="battle-move-list" class="move-drawer-body">对战棋谱：暂无。</div>
+                  </aside>
                 </div>
-              </div>
+              </section>
             </div>
-            <aside class="info-column">
-              <div id="battle-status" class="panel metric-panel"></div>
-              <div id="battle-move-list" class="panel metric-panel"></div>
-            </aside>
           </div>
-        </div>
-      </div>
         </section>
       </div>
     </main>
