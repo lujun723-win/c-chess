@@ -1424,7 +1424,6 @@ function buildReviewTimelineHtml(report, game) {
   if (!timeline.marks.some((m) => m.ply === uiState.reviewTimelineActivePly)) {
     uiState.reviewTimelineActivePly = timeline.marks[0]?.ply || null;
   }
-  const activeMark = timeline.marks.find((m) => m.ply === uiState.reviewTimelineActivePly) || null;
   const markerRows = timeline.marks
     .map((m) => {
       const left = timeline.total <= 1 ? 50 : ((m.ply - 1) / (timeline.total - 1)) * 100;
@@ -1434,19 +1433,12 @@ function buildReviewTimelineHtml(report, game) {
       )}%;" title="第 ${m.ply} 手 ${escapeHtml(m.notation)}"></button>`;
     })
     .join("");
-  const timelinePopup = activeMark
-    ? `<div class="timeline-popup">
-        <p><strong>第 ${activeMark.ply} 手</strong> · ${activeMark.side === "r" ? "红方" : "黑方"} ${escapeHtml(activeMark.notation)}</p>
-        <p>质量：${escapeHtml(activeMark.qualityLabel || "未评估")}</p>
-        <p>影响：${escapeHtml(activeMark.impact)}</p>
-        <button type="button" class="compact-btn" data-review-ply="${activeMark.ply}">跳到该手局面</button>
-      </div>`
-    : `<p class="review-empty">当前筛选下暂无标记点。</p>`;
+  const emptyHint = timeline.marks.length ? "" : `<p class="review-empty">当前筛选下暂无标记点。</p>`;
   return `<div class="review-timeline-track">
       <div class="review-timeline-line"></div>
       ${markerRows}
     </div>
-    ${timelinePopup}`;
+    ${emptyHint}`;
 }
 
 function renderBattleList() {
