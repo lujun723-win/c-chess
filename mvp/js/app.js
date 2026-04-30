@@ -1122,6 +1122,155 @@ function formatAssessmentInline(assessment) {
   return ` [${qualityText}${riskText}]`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function describeImpactFromAssessment(assessment) {
+  if (!assessment) return "信息不足";
+  const tags = [];
+  const risks = Array.isArray(assessment.risks) ? assessment.risks : [];
+  if (assessment.brilliant) tags.push("形成主动先手");
+  if (assessment.quality === "mistake") tags.push("局势波动较大");
+  if (risks.includes("落点可能被吃")) tags.push("落点可能被吃");
+  if (risks.includes("下一步可能被将")) tags.push("下一步可能被将");
+  if (assessment.threePly?.movedPieceCaptured) {
+    tags.push(`预演第${assessment.threePly.capturePly}手可能被反吃`);
+  }
+  if (assessment.threePly?.netSwing >= 1.2) tags.push("后续局面偏主动");
+  else if (assessment.threePly?.netSwing <= -1.2) tags.push("后续局面偏被动");
+  if (!tags.length) tags.push("局面总体平稳");
+  return tags.join("；");
+}
+
+function reviewCoachAdvice(item, assessment) {
+  if (assessment?.quality === "mistake") {
+    return "建议重摆该节点，先做“将军-吃子-威胁”三步检查，再与参考最优对照。";
+  }
+  if (assessment?.risks?.includes("下一步可能被将")) {
+    return "优先处理王城安全，先防将再争先。";
+  }
+  if (assessment?.risks?.length) {
+    return "建议先计算交换净值，再决定是否执行该计划。";
+  }
+  if (assessment?.brilliant) {
+    return "这是高质量主动手，建议记录触发条件，迁移到相似局面。";
+  }
+  if (item?.autoTags?.includes("反复调子")) {
+    return "该阶段有调子往返迹象，后续同类局面可优先选择带先手的转化。";
+  }
+  return "可行但仍可优化，下一次优先比较先手效率更高的候选手。";
+}
+
+function buildReviewHtml(report, game) {
+  const issueRows = report.topIssues.length
+    ? report.topIssues.map((x) => `<li>${escapeHtml(x.tag)} × ${x.count}</li>`).join("")
+    : "<li>暂无明显高频问题</li>";
+  const suggestionRows = report.suggestions.length
+    ? report.suggestions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
+    : "<li>暂无</li>";
+
+  const stepRows = report.items
+    .slice(0, 60)
+    .map((it) => {
+      const mv = game.moves[it.ply - 1];
+      const assessment = mv?.assessment || null;
+      const qualityText = assessment?.brilliant ? `${it.qualityLabel}·妙手` : it.qualityLabel;
+      const riskText = it.risks?.length ? it.risks.join("、") : "无";
+      const bestText = assessment?.bestMoveNotation || "—";
+      return `<tr>
+        <td>${it.ply}</td>
+        <td>${it.side === "r" ? "红" : "黑"}</td>
+        <td>${escapeHtml(it.notation)}</td>
+        <td>${escapeHtml(qualityText || "未评估")}</td>
+        <td>${escapeHtml(riskText)}</td>
+        <td>${escapeHtml(bestText)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const keyRows = report.keyMoments.length
+    ? report.keyMoments
+        .slice(0, 6)
+        .map((km) => {
+          const idx = km.ply - 1;
+          const item = report.items[idx];
+          const assessment = game.moves[idx]?.assessment || null;
+          const from = Math.max(1, km.ply - 2);
+          const to = Math.min(report.items.length, km.ply + 2);
+          const around = [];
+          for (let p = from; p <= to; p += 1) {
+            const pt = report.items[p - 1];
+            if (pt) around.push(`${p}. ${pt.side === "r" ? "红" : "黑"}${pt.notation}`);
+          }
+          const lineText = assessment?.threePly?.line?.length
+            ? assessment.threePly.line.join(" -> ")
+            : "暂无稳定预演线";
+          return `<article class="review-key-node">
+            <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
+            <p><strong>局势影响：</strong>${escapeHtml(describeImpactFromAssessment(assessment))}</p>
+            <p><strong>关键窗口：</strong>${escapeHtml(around.join(" ｜ "))}</p>
+            <p><strong>推演：</strong>${escapeHtml(lineText)}</p>
+            <p><strong>复盘指导：</strong>${escapeHtml(reviewCoachAdvice(item, assessment))}</p>
+          </article>`;
+        })
+        .join("")
+    : `<p class="review-empty">暂无明显关键节点，建议先从“有更优/失误”的走法做专项复盘。</p>`;
+
+  return `
+    <details class="review-section" open>
+      <summary>总览</summary>
+      <div class="review-section-body">
+        <p class="review-headline">${escapeHtml(report.gameName)} · ${gameModeText(report.mode)} · ${gameStatusText(
+          report.status,
+        )} · 共 ${report.totalPly} 手</p>
+        <div class="review-kpi-grid">
+          <div><span>最优</span><strong>${report.quality.best}</strong></div>
+          <div><span>有更优</span><strong>${report.quality.inaccuracy}</strong></div>
+          <div><span>失误</span><strong>${report.quality.mistake}</strong></div>
+          <div><span>风险点</span><strong>${report.risks.materialLoss + report.risks.checkThreat}</strong></div>
+        </div>
+        <p>开局：最优 ${report.phases.opening.best} / 有更优 ${report.phases.opening.inaccuracy} / 失误 ${report.phases.opening.mistake}</p>
+        <p>中局：最优 ${report.phases.middlegame.best} / 有更优 ${report.phases.middlegame.inaccuracy} / 失误 ${report.phases.middlegame.mistake}</p>
+        <p>收官：最优 ${report.phases.endgame.best} / 有更优 ${report.phases.endgame.inaccuracy} / 失误 ${report.phases.endgame.mistake}</p>
+        <div class="review-two-col">
+          <section><h5>高频问题</h5><ul>${issueRows}</ul></section>
+          <section><h5>训练建议</h5><ul>${suggestionRows}</ul></section>
+        </div>
+      </div>
+    </details>
+    <details class="review-section" open>
+      <summary>Step By Step 拆解</summary>
+      <div class="review-section-body">
+        <div class="review-table-wrap">
+          <table class="review-step-table">
+            <thead>
+              <tr><th>手</th><th>方</th><th>走法</th><th>质量</th><th>风险</th><th>参考最优</th></tr>
+            </thead>
+            <tbody>${stepRows}</tbody>
+          </table>
+        </div>
+        ${
+          report.items.length > 60
+            ? `<p class="review-note">已显示前 60 手，其余 ${report.items.length - 60} 手可继续扩展。</p>`
+            : ""
+        }
+      </div>
+    </details>
+    <details class="review-section" open>
+      <summary>关键节点重点复盘</summary>
+      <div class="review-section-body review-key-list">
+        ${keyRows}
+      </div>
+    </details>
+  `;
+}
+
 function renderBattleList() {
   const user = getCurrentUser();
   if (!user) {
@@ -1586,7 +1735,7 @@ function renderBattleMoveList() {
 function renderReviewResult() {
   const user = getCurrentUser();
   if (!user || !reviewState.gameId) {
-    reviewResultEl.textContent = "复盘结果：请先登录，并选择一盘已结束棋局。";
+    reviewResultEl.innerHTML = `<p class="review-empty">复盘结果：请先登录，并选择一盘已结束棋局。</p>`;
     if (reviewBoardEl) reviewBoardEl.innerHTML = "";
     if (reviewBoardStatus) reviewBoardStatus.textContent = "复盘棋盘：选择一盘已结束对局后显示。";
     renderCache.reviewBoardKey = "";
@@ -1594,6 +1743,7 @@ function renderReviewResult() {
   }
   try {
     const report = analyzeGame(reviewState.gameId);
+    const game = getGame(reviewState.gameId);
     const snap = getSnapshot(reviewState.gameId, Number.MAX_SAFE_INTEGER);
     const boardKey = reviewBoardRenderKey(snap);
     if (reviewBoardEl && renderCache.reviewBoardKey !== boardKey) {
@@ -1616,70 +1766,11 @@ function renderReviewResult() {
     }
     if (reviewBoardStatus) {
       const turnText = snap.turn === "r" ? "红方" : "黑方";
-      reviewBoardStatus.textContent = `复盘棋盘：终局快照\n总手数：${snap.max} 手\n终局轮到：${turnText}\n用途：仅用于局面参照，核心信息请看右侧复盘建议。`;
+      reviewBoardStatus.textContent = `复盘棋盘：终局快照\n总手数：${snap.max} 手\n终局轮到：${turnText}\n提示：右侧支持总览、逐手、关键节点折叠查看。`;
     }
-    const lines = [];
-    lines.push(`对局：${report.gameName}`);
-    lines.push(`模式：${gameModeText(report.mode)} · 状态：${gameStatusText(report.status)}`);
-    lines.push(`总手数：${report.totalPly}`);
-    lines.push("");
-    lines.push("全局概览：");
-    lines.push(
-      `- 质量分布：最优 ${report.quality.best} / 有更优 ${report.quality.inaccuracy} / 明显失误 ${report.quality.mistake}`,
-    );
-    lines.push(
-      `- 风险统计：送子风险 ${report.risks.materialLoss} / 被将风险 ${report.risks.checkThreat} / 战术得子 ${report.tactics.gainMaterial}`,
-    );
-    lines.push(
-      `- 手动标签：${report.manualTagCount} 条，关键片段 ${report.keyMoments.length} 处`,
-    );
-    lines.push("");
-    lines.push("阶段观察：");
-    lines.push(
-      `- 开局（前12手）：最优 ${report.phases.opening.best} / 有更优 ${report.phases.opening.inaccuracy} / 失误 ${report.phases.opening.mistake}`,
-    );
-    lines.push(
-      `- 中局（13-30手）：最优 ${report.phases.middlegame.best} / 有更优 ${report.phases.middlegame.inaccuracy} / 失误 ${report.phases.middlegame.mistake}`,
-    );
-    lines.push(
-      `- 收官（31手后）：最优 ${report.phases.endgame.best} / 有更优 ${report.phases.endgame.inaccuracy} / 失误 ${report.phases.endgame.mistake}`,
-    );
-    lines.push("");
-    lines.push("高频问题：");
-    if (!report.topIssues.length) lines.push("- 暂无");
-    report.topIssues.forEach((x) => lines.push(`- ${x.tag} x ${x.count}`));
-    lines.push("");
-    lines.push("建议：");
-    report.suggestions.forEach((s) => lines.push(`- ${s}`));
-    lines.push("");
-    lines.push("关键片段：");
-    if (!report.keyMoments.length) {
-      lines.push("- 暂无明显波动，整体较平稳。");
-    } else {
-      report.keyMoments.forEach((it) => {
-        const sideText = it.side === "r" ? "红" : "黑";
-        const tags = [...it.autoTags, ...it.manualTags.map((tag) => tag.tag)].filter(Boolean);
-        lines.push(
-          `- 第 ${it.ply} 手 ${sideText} ${it.notation} | ${it.qualityLabel}${
-            tags.length ? ` | 关注：${tags.join("、")}` : ""
-          }`,
-        );
-      });
-    }
-    lines.push("");
-    lines.push("逐手摘要：");
-    report.items.slice(0, 30).forEach((it) => {
-      const sideText = it.side === "r" ? "红" : "黑";
-      const auto = it.autoTags.length ? it.autoTags.join("、") : "无";
-      const manual = it.manualTags.length
-        ? it.manualTags.map((t) => `${t.tag}${t.note ? `(${t.note})` : ""}`).join("、")
-        : "无";
-      lines.push(`${it.ply}. ${sideText} ${it.notation} | 自动:${auto} | 手动:${manual}`);
-    });
-    if (report.items.length > 30) lines.push(`... 其余 ${report.items.length - 30} 手省略`);
-    reviewResultEl.textContent = lines.join("\n");
+    reviewResultEl.innerHTML = buildReviewHtml(report, game);
   } catch (err) {
-    reviewResultEl.textContent = `复盘结果加载失败：${err.message}`;
+    reviewResultEl.innerHTML = `<p class="review-empty">复盘结果加载失败：${escapeHtml(err.message)}</p>`;
   }
 }
 
