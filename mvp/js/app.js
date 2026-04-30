@@ -16,6 +16,7 @@ import {
   getSnapshot,
   makeMove,
   endGame,
+  resignGame,
   undoGameMove,
   runAiTurnIfReady,
   pieceLabel,
@@ -52,6 +53,7 @@ const aiSideSelect = document.getElementById("ai-side");
 const aiLevelSelect = document.getElementById("ai-level");
 const createGameBtn = document.getElementById("create-game-btn");
 const undoGameBtn = document.getElementById("undo-game-btn");
+const resignGameBtn = document.getElementById("resign-game-btn");
 const endGameBtn = document.getElementById("end-game-btn");
 const gameSelect = document.getElementById("game-select");
 const gameSetupPanel = document.getElementById("game-setup-panel");
@@ -232,7 +234,8 @@ function renderTrendBar(snap) {
 
 function formatMoveWithSide(move, boardBefore) {
   if (!move) return "--";
-  const side = move.side === "r" ? "红" : "黑";
+  const moveSide = move.side || move.piece?.[0] || "";
+  const side = moveSide === "r" ? "红" : "黑";
   return `${side} ${toChineseNotation(move, boardBefore)}`;
 }
 
@@ -256,10 +259,11 @@ function renderRecentQueue(game, snap) {
     let selfText = "--";
     for (let i = slice.length - 1; i >= 0; i -= 1) {
       const mv = slice[i];
+      const mvSide = mv.side || mv.piece?.[0] || "";
       const text = formatMoveWithSide(mv, game.snapshots?.[i] || null);
-      if (mv.side !== mySide && opponentText === "--") {
+      if (mvSide && mvSide !== mySide && opponentText === "--") {
         opponentText = text;
-      } else if (mv.side === mySide && selfText === "--") {
+      } else if (mvSide && mvSide === mySide && selfText === "--") {
         selfText = text;
       }
       if (opponentText !== "--" && selfText !== "--") break;
@@ -273,6 +277,27 @@ function renderRecentQueue(game, snap) {
   recentOpponentMoveEl.textContent = formatMoveWithSide(slice[lastIdx], game.snapshots?.[lastIdx] || null);
   recentSelfMoveEl.textContent =
     prevIdx >= 0 ? formatMoveWithSide(slice[prevIdx], game.snapshots?.[prevIdx] || null) : "--";
+}
+
+function finalizeGameWithSavePrompt({ endReasonText = "对局已结束。" } = {}) {
+  if (!gameState.gameId) return;
+  const keepRecord = confirm(
+    "是否保存棋谱与复盘数据？\n点击“确定”：保存并结束。\n点击“取消”：不保存，删除该对局及其复盘数据。",
+  );
+  endGame(gameState.gameId, { keepRecord });
+  gameState.gameId = null;
+  gameState.ply = 0;
+  gameState.followLatest = true;
+  gameState.selected = null;
+  uiState.showSetupInGame = false;
+  uiState.showHintCard = false;
+  uiState.showMoveDrawer = false;
+  renderAll();
+  alert(
+    keepRecord
+      ? `${endReasonText} 已保存棋谱，可在历史里回放。`
+      : `${endReasonText} 未保存，棋谱与复盘数据已删除。`,
+  );
 }
 
 function formatHintDetail(assessment, latestMoveNotation = "") {
@@ -1135,6 +1160,7 @@ function renderBoard() {
     boardEl.innerHTML = "";
     boardStatus.textContent = "请先新建对局，或从历史对局进入回放。";
     undoGameBtn.disabled = true;
+    if (resignGameBtn) resignGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
     renderHomeOverview();
@@ -1230,6 +1256,7 @@ function renderBoard() {
     nextPlyBtn.disabled = snap.index === snap.max;
     lastPlyBtn.disabled = snap.index === snap.max;
     undoGameBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
+    if (resignGameBtn) resignGameBtn.disabled = snap.status === "finished";
     boardStatus.dataset.fullText = statusSummary;
   } catch (err) {
     renderCache.gameBoardKey = "";
@@ -1239,6 +1266,7 @@ function renderBoard() {
     if (recentSelfMoveEl) recentSelfMoveEl.textContent = "--";
     if (hintContentEl) hintContentEl.textContent = "暂无提示";
     undoGameBtn.disabled = true;
+    if (resignGameBtn) resignGameBtn.disabled = true;
     renderMoveList();
     renderReviewResult();
   }
@@ -1651,6 +1679,12 @@ function syncAiIfNeeded({ forceRender = false } = {}) {
     let pendingThinkMs = 0;
     if (game.turn === game.aiSide) {
       const res = runAiTurnIfReady(gameState.gameId);
+      if (res.resigned) {
+        renderGameList();
+        renderBoard();
+        finalizeGameWithSavePrompt({ endReasonText: "电脑已认输。" });
+        return;
+      }
       movedOrThinking = Boolean(res.moved || res.aiThinking);
       if (res.aiThinking) {
         try {
@@ -1968,19 +2002,28 @@ endGameBtn.addEventListener("click", () => {
     if (!gameState.gameId) throw new Error("请先选择一个对局");
     const yes = confirm("确认结束当前对局？");
     if (!yes) return;
-    const keepRecord = confirm(
-      "是否保存棋谱与复盘数据？\n点击“确定”：保存并结束。\n点击“取消”：不保存，删除该对局及其复盘数据。",
-    );
-    endGame(gameState.gameId, { keepRecord });
-    gameState.gameId = null;
-    gameState.ply = 0;
-    gameState.followLatest = true;
-    gameState.selected = null;
-    uiState.showSetupInGame = false;
-    uiState.showHintCard = false;
-    uiState.showMoveDrawer = false;
-    renderAll();
-    alert(keepRecord ? "已结束并保存棋谱。可在列表回放。" : "已结束且未保存，棋谱与复盘数据已删除。");
+    finalizeGameWithSavePrompt({ endReasonText: "对局已结束。" });
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+resignGameBtn?.addEventListener("click", () => {
+  try {
+    if (!gameState.gameId) throw new Error("请先选择一个对局");
+    const yes = confirm("确认认输？");
+    if (!yes) return;
+    const live = getSnapshot(gameState.gameId, Number.MAX_SAFE_INTEGER);
+    const resignSide =
+      live.mode === "ai"
+        ? live.aiSide === "r"
+          ? "b"
+          : "r"
+        : live.turn;
+    resignGame(gameState.gameId, { side: resignSide });
+    renderGameList();
+    renderBoard();
+    finalizeGameWithSavePrompt({ endReasonText: `${sideText(resignSide)}认输。` });
   } catch (err) {
     alert(err.message);
   }

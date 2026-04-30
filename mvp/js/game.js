@@ -1166,6 +1166,17 @@ function maybePlayAiTurn(game) {
   return true;
 }
 
+function shouldAiResign(game) {
+  if (!game || game.mode !== "ai" || game.status !== "active") return false;
+  const board = cloneBoard(game.snapshots[game.snapshots.length - 1]);
+  const aiSide = game.aiSide || "b";
+  const evalForAi = evaluateBoardForSide(board, aiSide);
+  if (evalForAi > -11.5) return false;
+  if (game.moves.length < 10) return false;
+  if (canGiveCheckInOne(board, aiSide, oppositeSide(aiSide))) return false;
+  return true;
+}
+
 function clearAiThinkState(game) {
   delete game.aiThinkDueAt;
   delete game.aiThinkStartedAt;
@@ -1580,14 +1591,30 @@ export function runAiTurnIfReady(gameId) {
   const dueAt = game.aiThinkDueAt ? new Date(game.aiThinkDueAt).getTime() : now;
   const msLeft = Math.max(0, dueAt - now);
   if (msLeft > 0) {
-    return { moved: false, aiThinking: true, aiThinkMsLeft: msLeft };
+    return { moved: false, aiThinking: true, aiThinkMsLeft: msLeft, resigned: false };
+  }
+
+  if (shouldAiResign(game)) {
+    game.status = "finished";
+    game.winnerSide = oppositeSide(game.aiSide || "b");
+    clearAiThinkState(game);
+    game.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return {
+      moved: false,
+      aiThinking: false,
+      aiThinkMsLeft: 0,
+      resigned: true,
+      resignedSide: game.aiSide || "b",
+      winnerSide: game.winnerSide,
+    };
   }
 
   const moved = maybePlayAiTurn(game);
   clearAiThinkState(game);
   game.updatedAt = new Date().toISOString();
   saveDb(db);
-  return { moved, aiThinking: false, aiThinkMsLeft: 0 };
+  return { moved, aiThinking: false, aiThinkMsLeft: 0, resigned: false };
 }
 
 export function endGame(gameId, { keepRecord = true } = {}) {
@@ -1608,6 +1635,21 @@ export function endGame(gameId, { keepRecord = true } = {}) {
   }
   saveDb(db);
   return { keepRecord };
+}
+
+export function resignGame(gameId, { side = null } = {}) {
+  const { db, userId } = requireCurrentUser();
+  const game = db.games.find((g) => g.id === gameId && g.userId === userId);
+  if (!game) throw new Error("对局不存在或无权限");
+  if ((game.status || "active") === "finished") throw new Error("该对局已结束");
+  clearAiThinkState(game);
+  const resignSide = side || (game.mode === "ai" ? oppositeSide(game.aiSide || "b") : game.turn);
+  if (resignSide !== "r" && resignSide !== "b") throw new Error("认输方非法");
+  game.status = "finished";
+  game.winnerSide = oppositeSide(resignSide);
+  game.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return { resignedSide: resignSide, winnerSide: game.winnerSide };
 }
 
 export function undoGameMove(gameId) {
