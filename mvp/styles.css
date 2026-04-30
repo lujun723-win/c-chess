@@ -37,29 +37,23 @@ body {
 
 
 .top {
-  padding: 18px 18px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(255, 250, 244, 0.92), rgba(247, 241, 232, 0.84));
-  backdrop-filter: blur(14px);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  box-shadow: 0 10px 24px rgba(60, 41, 26, 0.06);
+  background: rgba(255, 251, 246, 0.9);
 }
 
 .top-inner {
-  max-width: 1320px;
+  max-width: 1240px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .top h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 20px;
   font-family: "Noto Serif SC", "PingFang SC", serif;
   font-weight: 700;
   letter-spacing: 0;
@@ -67,11 +61,10 @@ body {
 }
 
 .brand-sub {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: var(--muted);
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 
 .session {
@@ -80,12 +73,29 @@ body {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(200, 185, 167, 0.8);
   border-radius: 999px;
-  padding: 8px 12px;
-  min-height: 38px;
+  padding: 5px 8px;
+  min-height: 34px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.session-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 94, 52, 0.14);
+  color: var(--brand-deep);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-userline {
+  white-space: nowrap;
 }
 
 .session-cta {
@@ -103,6 +113,12 @@ body {
   border: 0;
   color: var(--brand);
   transform: none;
+}
+
+.session button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
 .app-shell {

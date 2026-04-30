@@ -633,7 +633,8 @@ function renderSession() {
     });
     return;
   }
-  sessionBar.innerHTML = `当前用户：${user.name}（${user.email}） <button id="logout-btn">退出登录</button>`;
+  const avatar = (user.name || user.email || "U").trim().slice(0, 1).toUpperCase();
+  sessionBar.innerHTML = `<span class="session-avatar">${avatar}</span><span class="session-userline">${user.name}</span><button id="logout-btn">退出</button>`;
   document.getElementById("logout-btn").addEventListener("click", () => {
     logoutUser();
     gameState.gameId = null;
