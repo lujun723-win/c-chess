@@ -31,9 +31,6 @@ body {
   line-height: 1.55;
 }
 
-body.board-view-lock {
-  overflow: hidden;
-}
 
 .top {
   padding: 18px 18px 16px;
@@ -119,13 +116,6 @@ body.board-view-lock {
   gap: 14px;
 }
 
-body.board-view-lock .app-shell {
-  height: calc(100vh - 86px);
-}
-
-body.board-view-lock .workspace {
-  height: 100%;
-}
 
 .page-view {
   display: none;
@@ -135,9 +125,6 @@ body.board-view-lock .workspace {
   display: block;
 }
 
-body.board-view-lock .page-view.board-page.is-active {
-  height: 100%;
-}
 
 .module-grid {
   display: grid;
@@ -229,11 +216,6 @@ body.board-view-lock .page-view.board-page.is-active {
   width: 100%;
 }
 
-body.board-view-lock .page-view.board-page.is-active > .card {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
 
 .page-head {
   display: flex;
@@ -395,9 +377,6 @@ body.board-view-lock .page-view.board-page.is-active > .card {
   gap: 10px;
 }
 
-body.board-view-lock .page-view.board-page.is-active .stack {
-  min-height: 0;
-}
 
 .stack > label {
   color: var(--muted);
@@ -519,10 +498,6 @@ hr {
   align-items: start;
 }
 
-body.board-view-lock .page-view.board-page.is-active .play-surface {
-  height: 100%;
-  min-height: 0;
-}
 
 .board-column {
   position: sticky;
@@ -532,9 +507,6 @@ body.board-view-lock .page-view.board-page.is-active .play-surface {
   align-self: start;
 }
 
-body.board-view-lock .page-view.board-page.is-active .board-column {
-  position: static;
-}
 
 .xiangqi-board-frame {
   border: 1px solid rgba(214, 201, 185, 0.95);
@@ -550,13 +522,6 @@ body.board-view-lock .page-view.board-page.is-active .board-column {
   align-content: start;
 }
 
-body.board-view-lock .page-view.board-page.is-active .info-column {
-  max-height: 100%;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
-  overscroll-behavior: contain;
-}
 
 .metric-panel {
   margin-top: 0;

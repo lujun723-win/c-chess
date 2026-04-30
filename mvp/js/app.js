@@ -710,7 +710,7 @@ function shouldLockBoardView(viewId) {
 }
 
 function updateBoardViewLock(viewId) {
-  document.body.classList.toggle("board-view-lock", shouldLockBoardView(viewId));
+  document.body.classList.remove("board-view-lock");
 }
 
 function activateView(viewId, { updateHash = true } = {}) {
