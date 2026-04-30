@@ -1396,6 +1396,7 @@ function onBoardCellClick(row, col, code, snap) {
     return;
   }
   try {
+    const keepScrollY = window.scrollY;
     makeMove(gameState.gameId, fromRow, fromCol, row, col);
     gameState.selected = null;
     gameState.followLatest = true;
@@ -1403,6 +1404,12 @@ function onBoardCellClick(row, col, code, snap) {
     gameState.ply = last.index;
     renderGameList();
     renderBoard();
+    if (IOS_SAFARI) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, keepScrollY);
+        setTimeout(() => window.scrollTo(0, keepScrollY), 0);
+      });
+    }
   } catch (err) {
     boardStatus.textContent = err.message;
     gameState.selected = null;
@@ -1454,12 +1461,19 @@ function onBattleCellClick(row, col, code, snap, role) {
     return;
   }
   try {
+    const keepScrollY = window.scrollY;
     makeBattleMove(battleState.battleId, fromRow, fromCol, row, col);
     battleState.selected = null;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.followLatest = true;
     renderBattleList();
     renderBattleBoard();
+    if (IOS_SAFARI) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, keepScrollY);
+        setTimeout(() => window.scrollTo(0, keepScrollY), 0);
+      });
+    }
   } catch (err) {
     battleStatus.textContent = err.message;
     battleState.selected = null;
