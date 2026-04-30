@@ -1257,6 +1257,7 @@ function buildReviewSideStats(report, game, sideFilter) {
   const stats = {
     quality: { best: 0, inaccuracy: 0, mistake: 0 },
     risks: { materialLoss: 0, checkThreat: 0 },
+    riskMoves: 0,
     phases: {
       opening: { best: 0, inaccuracy: 0, mistake: 0 },
       middlegame: { best: 0, inaccuracy: 0, mistake: 0 },
@@ -1278,6 +1279,10 @@ function buildReviewSideStats(report, game, sideFilter) {
     if (quality === "best") stats.quality.best += 1;
     else if (quality === "inaccuracy") stats.quality.inaccuracy += 1;
     else if (quality === "mistake") stats.quality.mistake += 1;
+    const hasRisk = Array.isArray(item.risks) && item.risks.length > 0;
+    if (hasRisk) {
+      stats.riskMoves += 1;
+    }
     if (
       item.risks.includes("落点可能被吃") ||
       item.risks.includes("三步内可能净亏交换") ||
@@ -1388,7 +1393,7 @@ function buildReviewHtml(report, game) {
           <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${sideStats.quality.best}</strong></button>
           <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${sideStats.quality.inaccuracy}</strong></button>
           <button type="button" class="review-filter-chip${filter === "mistake" ? " is-active" : ""}" data-review-filter="mistake"><span>失误</span><strong>${sideStats.quality.mistake}</strong></button>
-          <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${sideStats.risks.materialLoss + sideStats.risks.checkThreat}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${sideStats.riskMoves}</strong></button>
         </div>
         <button type="button" class="compact-btn review-filter-reset${filter === "all" ? " is-active" : ""}" data-review-filter="all">显示全部关键点</button>
         <p>开局：最优 ${sideStats.phases.opening.best} / 有更优 ${sideStats.phases.opening.inaccuracy} / 失误 ${sideStats.phases.opening.mistake}</p>
