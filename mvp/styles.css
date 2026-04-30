@@ -834,6 +834,8 @@ hr {
   display: grid;
   gap: 10px;
   align-content: start;
+  position: sticky;
+  top: 88px;
 }
 
 .review-board-wrap {
@@ -861,6 +863,16 @@ hr {
   display: grid;
   gap: 10px;
   min-height: 0;
+  max-height: calc(100vh - 104px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.review-timeline-panel {
+  margin-top: 0;
+  min-height: auto;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .review-result-panel {
@@ -919,12 +931,7 @@ hr {
 }
 
 .review-kpi-grid > div {
-  border: 1px solid rgba(214, 201, 185, 0.92);
-  border-radius: 8px;
-  padding: 6px 8px;
-  display: grid;
-  gap: 2px;
-  background: rgba(252, 247, 239, 0.92);
+  display: contents;
 }
 
 .review-kpi-grid span {
@@ -935,6 +942,102 @@ hr {
 .review-kpi-grid strong {
   font-size: 16px;
   color: var(--brand-deep);
+}
+
+.review-filter-chip {
+  border: 1px solid rgba(214, 201, 185, 0.92);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: grid;
+  gap: 2px;
+  background: rgba(252, 247, 239, 0.92);
+  min-height: auto;
+  text-align: left;
+}
+
+.review-filter-chip.is-active {
+  border-color: rgba(156, 118, 78, 0.95);
+  background: rgba(255, 239, 211, 0.95);
+}
+
+.review-filter-reset {
+  justify-self: start;
+  min-height: 32px;
+}
+
+.review-filter-reset.is-active {
+  border-color: rgba(156, 118, 78, 0.95);
+  background: rgba(255, 239, 211, 0.95);
+}
+
+.review-timeline-track {
+  position: relative;
+  height: 34px;
+  margin-top: 2px;
+}
+
+.review-timeline-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(199, 154, 102, 0.4), rgba(96, 77, 57, 0.35));
+}
+
+.timeline-mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+  min-width: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #7b5d40;
+  background: #f0d8b9;
+}
+
+.timeline-mark.tone-best {
+  background: #9bc989;
+}
+
+.timeline-mark.tone-inaccuracy {
+  background: #d8c16d;
+}
+
+.timeline-mark.tone-mistake {
+  background: #d97b6a;
+}
+
+.timeline-mark.tone-risk {
+  background: #d09c58;
+}
+
+.timeline-mark.is-active {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  box-shadow: 0 0 0 3px rgba(196, 146, 75, 0.22);
+}
+
+.timeline-popup {
+  border: 1px solid rgba(214, 201, 185, 0.95);
+  border-radius: 8px;
+  background: rgba(252, 247, 239, 0.95);
+  padding: 8px 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.timeline-popup p {
+  margin: 0;
+  font-size: 13px;
+  color: #3f3126;
 }
 
 .review-two-col {
@@ -1016,6 +1119,18 @@ hr {
 
 .review-jump-btn {
   justify-self: start;
+}
+
+.review-step-banner {
+  margin-top: 0;
+  min-height: auto;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.review-replay-row button {
+  min-height: 34px;
+  padding: 6px 8px;
 }
 
 .review-key-node h5,
@@ -1547,6 +1662,15 @@ body.ios-safari-perf .board-column {
 
   .review-surface {
     grid-template-columns: 1fr;
+  }
+
+  .review-board-pane {
+    position: static;
+  }
+
+  .review-info-pane {
+    max-height: none;
+    overflow: visible;
   }
 
   .review-kpi-grid {

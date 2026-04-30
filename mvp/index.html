@@ -479,20 +479,16 @@
                     </div>
                   </div>
                   <div id="review-board-status" class="panel review-board-status"></div>
+                  <div class="row replay-row review-replay-row">
+                    <button id="review-first-ply-btn" type="button">|&lt;</button>
+                    <button id="review-prev-ply-btn" type="button">&lt;</button>
+                    <button id="review-next-ply-btn" type="button">&gt;</button>
+                    <button id="review-last-ply-btn" type="button">&gt;|</button>
+                  </div>
+                  <div id="review-step-banner" class="panel review-step-banner">当前：终局局面</div>
                 </aside>
                 <section class="review-info-pane">
-                  <div class="row">
-                    <input id="tag-ply" type="number" min="1" placeholder="步号（如 12）" />
-                    <select id="tag-type">
-                      <option value="漏算">漏算</option>
-                      <option value="冒进">冒进</option>
-                      <option value="忽略将军">忽略将军</option>
-                      <option value="调子过多">调子过多</option>
-                      <option value="好棋">好棋</option>
-                    </select>
-                  </div>
-                  <input id="tag-note" placeholder="备注（可选）" />
-                  <button id="add-tag-btn" type="button">添加手动标签</button>
+                  <div id="review-timeline" class="panel review-timeline-panel">时间轴：等待分析结果。</div>
                   <div id="review-result" class="panel review-result-panel"></div>
                 </section>
               </div>

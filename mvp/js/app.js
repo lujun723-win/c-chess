@@ -23,7 +23,6 @@ import {
   getGame,
   toChineseNotation,
   analyzeGame,
-  setManualReviewTag,
   createBattle,
   joinBattleById,
   getMyBattles,
@@ -81,11 +80,13 @@ const reviewResultEl = document.getElementById("review-result");
 const reviewGameSelect = document.getElementById("review-game-select");
 const reviewBoardEl = document.getElementById("review-board-points");
 const reviewBoardStatus = document.getElementById("review-board-status");
+const reviewTimelineEl = document.getElementById("review-timeline");
+const reviewStepBannerEl = document.getElementById("review-step-banner");
+const reviewFirstPlyBtn = document.getElementById("review-first-ply-btn");
+const reviewPrevPlyBtn = document.getElementById("review-prev-ply-btn");
+const reviewNextPlyBtn = document.getElementById("review-next-ply-btn");
+const reviewLastPlyBtn = document.getElementById("review-last-ply-btn");
 const analyzeGameBtn = document.getElementById("analyze-game-btn");
-const tagPlyInput = document.getElementById("tag-ply");
-const tagTypeSelect = document.getElementById("tag-type");
-const tagNoteInput = document.getElementById("tag-note");
-const addTagBtn = document.getElementById("add-tag-btn");
 const firstPlyBtn = document.getElementById("first-ply-btn");
 const prevPlyBtn = document.getElementById("prev-ply-btn");
 const nextPlyBtn = document.getElementById("next-ply-btn");
@@ -160,6 +161,8 @@ const uiState = {
   trendEvalScore: 0,
   hintCacheKey: "",
   hintCacheText: "暂无提示",
+  reviewTimelineFilter: "all",
+  reviewTimelineActivePly: null,
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
@@ -879,9 +882,13 @@ function renderReviewGameOptions() {
     reviewState.gameId && finishedGames.some((game) => game.id === reviewState.gameId)
       ? reviewState.gameId
       : finishedGames[0].id;
+  const changed = preferredId !== reviewState.gameId;
   reviewState.gameId = preferredId;
-  reviewState.ply = Number.MAX_SAFE_INTEGER;
-  reviewState.focusPly = null;
+  if (changed) {
+    reviewState.ply = Number.MAX_SAFE_INTEGER;
+    reviewState.focusPly = null;
+    uiState.reviewTimelineActivePly = null;
+  }
   reviewGameSelect.value = preferredId;
 }
 
@@ -1177,6 +1184,41 @@ function reviewCoachAdvice(item, assessment) {
   return "可行但仍可优化，下一次优先比较先手效率更高的候选手。";
 }
 
+function shouldIncludeTimelineMark(item, assessment, filter) {
+  const risks = Array.isArray(item?.risks) ? item.risks : [];
+  if (filter === "best") return assessment?.quality === "best";
+  if (filter === "inaccuracy") return assessment?.quality === "inaccuracy";
+  if (filter === "mistake") return assessment?.quality === "mistake";
+  if (filter === "risk") return risks.length > 0;
+  return assessment?.quality === "mistake" || risks.length > 0 || assessment?.brilliant;
+}
+
+function timelineTone(item, assessment) {
+  const risks = Array.isArray(item?.risks) ? item.risks : [];
+  if (assessment?.quality === "mistake") return "mistake";
+  if (risks.length > 0) return "risk";
+  if (assessment?.quality === "inaccuracy") return "inaccuracy";
+  return "best";
+}
+
+function buildTimelineModel(report, game, filter) {
+  const total = Math.max(1, report.totalPly);
+  const marks = [];
+  for (const item of report.items) {
+    const assessment = game.moves[item.ply - 1]?.assessment || null;
+    if (!shouldIncludeTimelineMark(item, assessment, filter)) continue;
+    marks.push({
+      ply: item.ply,
+      side: item.side,
+      notation: item.notation,
+      qualityLabel: assessment?.brilliant ? `${item.qualityLabel}·妙手` : item.qualityLabel,
+      impact: describeImpactFromAssessment(assessment),
+      tone: timelineTone(item, assessment),
+    });
+  }
+  return { total, marks };
+}
+
 function buildReviewHtml(report, game) {
   const issueRows = report.topIssues.length
     ? report.topIssues.map((x) => `<li>${escapeHtml(x.tag)} × ${x.count}</li>`).join("")
@@ -1184,26 +1226,29 @@ function buildReviewHtml(report, game) {
   const suggestionRows = report.suggestions.length
     ? report.suggestions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
     : "<li>暂无</li>";
-
-  const stepRows = report.items
-    .slice(0, 60)
-    .map((it) => {
-      const mv = game.moves[it.ply - 1];
-      const assessment = mv?.assessment || null;
-      const qualityText = assessment?.brilliant ? `${it.qualityLabel}·妙手` : it.qualityLabel;
-      const riskText = it.risks?.length ? it.risks.join("、") : "无";
-      const bestText = assessment?.bestMoveNotation || "—";
-      const rowClass = reviewState.focusPly === it.ply ? ` class="is-focus"` : "";
-      return `<tr${rowClass}>
-        <td>${it.ply}</td>
-        <td>${it.side === "r" ? "红" : "黑"}</td>
-        <td>${escapeHtml(it.notation)}</td>
-        <td>${escapeHtml(qualityText || "未评估")}</td>
-        <td>${escapeHtml(riskText)}</td>
-        <td>${escapeHtml(bestText)}</td>
-      </tr>`;
+  const filter = uiState.reviewTimelineFilter || "all";
+  const timeline = buildTimelineModel(report, game, filter);
+  if (!timeline.marks.some((m) => m.ply === uiState.reviewTimelineActivePly)) {
+    uiState.reviewTimelineActivePly = timeline.marks[0]?.ply || null;
+  }
+  const activeMark = timeline.marks.find((m) => m.ply === uiState.reviewTimelineActivePly) || null;
+  const markerRows = timeline.marks
+    .map((m) => {
+      const left = timeline.total <= 1 ? 50 : ((m.ply - 1) / (timeline.total - 1)) * 100;
+      const activeClass = m.ply === uiState.reviewTimelineActivePly ? " is-active" : "";
+      return `<button type="button" class="timeline-mark tone-${m.tone}${activeClass}" data-review-marker="${m.ply}" style="left:${left.toFixed(
+        2,
+      )}%;" title="第 ${m.ply} 手 ${escapeHtml(m.notation)}"></button>`;
     })
     .join("");
+  const timelinePopup = activeMark
+    ? `<div class="timeline-popup">
+        <p><strong>第 ${activeMark.ply} 手</strong> · ${activeMark.side === "r" ? "红方" : "黑方"} ${escapeHtml(activeMark.notation)}</p>
+        <p>质量：${escapeHtml(activeMark.qualityLabel || "未评估")}</p>
+        <p>影响：${escapeHtml(activeMark.impact)}</p>
+        <button type="button" class="compact-btn" data-review-ply="${activeMark.ply}">跳到该手局面</button>
+      </div>`
+    : `<p class="review-empty">当前筛选下暂无标记点。</p>`;
 
   const keyRows = report.keyMoments.length
     ? report.keyMoments
@@ -1243,11 +1288,12 @@ function buildReviewHtml(report, game) {
           report.status,
         )} · 共 ${report.totalPly} 手</p>
         <div class="review-kpi-grid">
-          <div><span>最优</span><strong>${report.quality.best}</strong></div>
-          <div><span>有更优</span><strong>${report.quality.inaccuracy}</strong></div>
-          <div><span>失误</span><strong>${report.quality.mistake}</strong></div>
-          <div><span>风险点</span><strong>${report.risks.materialLoss + report.risks.checkThreat}</strong></div>
+          <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${report.quality.best}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${report.quality.inaccuracy}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "mistake" ? " is-active" : ""}" data-review-filter="mistake"><span>失误</span><strong>${report.quality.mistake}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${report.risks.materialLoss + report.risks.checkThreat}</strong></button>
         </div>
+        <button type="button" class="compact-btn review-filter-reset${filter === "all" ? " is-active" : ""}" data-review-filter="all">显示全部关键点</button>
         <p>开局：最优 ${report.phases.opening.best} / 有更优 ${report.phases.opening.inaccuracy} / 失误 ${report.phases.opening.mistake}</p>
         <p>中局：最优 ${report.phases.middlegame.best} / 有更优 ${report.phases.middlegame.inaccuracy} / 失误 ${report.phases.middlegame.mistake}</p>
         <p>收官：最优 ${report.phases.endgame.best} / 有更优 ${report.phases.endgame.inaccuracy} / 失误 ${report.phases.endgame.mistake}</p>
@@ -1258,24 +1304,23 @@ function buildReviewHtml(report, game) {
       </div>
     </details>
     <details class="review-section" open>
-      <summary>Step By Step 拆解</summary>
+      <summary>关键时间轴</summary>
       <div class="review-section-body">
-        <div class="review-table-wrap">
-          <table class="review-step-table">
-            <thead>
-              <tr><th>手</th><th>方</th><th>走法</th><th>质量</th><th>风险</th><th>参考最优</th></tr>
-            </thead>
-            <tbody>${stepRows}</tbody>
-          </table>
+        <div class="review-timeline-track">
+          <div class="review-timeline-line"></div>
+          ${markerRows}
         </div>
-        ${
-          report.items.length > 60
-            ? `<p class="review-note">已显示前 60 手，其余 ${report.items.length - 60} 手可继续扩展。</p>`
-            : ""
-        }
+        <p class="review-note">点击标记点查看节点信息，再点击“跳到该手局面”即可联动棋盘。</p>
+        ${timelinePopup}
       </div>
     </details>
     <details class="review-section" open>
+      <summary>Step By Step（按钮步进）</summary>
+      <div class="review-section-body">
+        <p class="review-note">使用棋盘下方的 |&lt;、&lt;、&gt;、&gt;| 按钮逐手切换。每一步信息会在棋盘下方信息条更新，不遮挡棋盘。</p>
+      </div>
+    </details>
+    <details class="review-section">
       <summary>关键节点重点复盘</summary>
       <div class="review-section-body review-key-list">
         ${keyRows}
@@ -1749,8 +1794,14 @@ function renderReviewResult() {
   const user = getCurrentUser();
   if (!user || !reviewState.gameId) {
     reviewResultEl.innerHTML = `<p class="review-empty">复盘结果：请先登录，并选择一盘已结束棋局。</p>`;
+    if (reviewTimelineEl) reviewTimelineEl.textContent = "时间轴：等待分析结果。";
+    if (reviewStepBannerEl) reviewStepBannerEl.textContent = "当前：终局局面";
     if (reviewBoardEl) reviewBoardEl.innerHTML = "";
     if (reviewBoardStatus) reviewBoardStatus.textContent = "复盘棋盘：选择一盘已结束对局后显示。";
+    if (reviewFirstPlyBtn) reviewFirstPlyBtn.disabled = true;
+    if (reviewPrevPlyBtn) reviewPrevPlyBtn.disabled = true;
+    if (reviewNextPlyBtn) reviewNextPlyBtn.disabled = true;
+    if (reviewLastPlyBtn) reviewLastPlyBtn.disabled = true;
     renderCache.reviewBoardKey = "";
     return;
   }
@@ -1784,8 +1835,36 @@ function renderReviewResult() {
       const atText = snap.index === snap.max ? "终局快照" : `第 ${snap.index} 手局面`;
       reviewBoardStatus.textContent = `复盘棋盘：${atText}\n总手数：${snap.max} 手\n当前轮到：${turnText}\n提示：点击关键节点可跳转对应手数。`;
     }
+    if (reviewTimelineEl) {
+      reviewTimelineEl.textContent = `时间轴筛选：${
+        uiState.reviewTimelineFilter === "all"
+          ? "全部关键点"
+          : uiState.reviewTimelineFilter === "best"
+            ? "最优"
+            : uiState.reviewTimelineFilter === "inaccuracy"
+              ? "有更优"
+              : uiState.reviewTimelineFilter === "mistake"
+                ? "失误"
+                : "风险点"
+      }`;
+    }
+    if (reviewStepBannerEl) {
+      const currentMove = snap.index > 0 ? game.moves[snap.index - 1] : null;
+      const currentAssessment = currentMove?.assessment || null;
+      const moveText = currentMove ? toChineseNotation(currentMove, game.snapshots[snap.index - 1] || null) : "开局";
+      const qualityText = currentAssessment
+        ? `${currentAssessment.qualityLabel}${currentAssessment.brilliant ? "·妙手" : ""}`
+        : "未评估";
+      const impactText = currentAssessment ? describeImpactFromAssessment(currentAssessment) : "局面初始化";
+      reviewStepBannerEl.textContent = `第 ${snap.index}/${snap.max} 手 · ${snap.index > 0 ? moveText : "开局局面"} · 质量：${qualityText} · 影响：${impactText}`;
+    }
+    if (reviewFirstPlyBtn) reviewFirstPlyBtn.disabled = snap.index === 0;
+    if (reviewPrevPlyBtn) reviewPrevPlyBtn.disabled = snap.index === 0;
+    if (reviewNextPlyBtn) reviewNextPlyBtn.disabled = snap.index === snap.max;
+    if (reviewLastPlyBtn) reviewLastPlyBtn.disabled = snap.index === snap.max;
     reviewResultEl.innerHTML = buildReviewHtml(report, game);
   } catch (err) {
+    if (reviewTimelineEl) reviewTimelineEl.textContent = "时间轴：加载失败。";
     reviewResultEl.innerHTML = `<p class="review-empty">复盘结果加载失败：${escapeHtml(err.message)}</p>`;
   }
 }
@@ -2281,20 +2360,36 @@ lastPlyBtn.addEventListener("click", () => {
 analyzeGameBtn.addEventListener("click", () => {
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
+  uiState.reviewTimelineActivePly = null;
   renderReviewResult();
 });
 
-addTagBtn.addEventListener("click", () => {
-  try {
-    if (!reviewState.gameId) throw new Error("请先选择已结束棋局");
-    const ply = Number(tagPlyInput.value);
-    if (!Number.isInteger(ply) || ply <= 0) throw new Error("请输入正确步号");
-    setManualReviewTag(reviewState.gameId, ply, tagTypeSelect.value, tagNoteInput.value);
-    tagNoteInput.value = "";
-    renderReviewResult();
-  } catch (err) {
-    alert(err.message);
-  }
+reviewFirstPlyBtn?.addEventListener("click", () => {
+  reviewState.ply = 0;
+  reviewState.focusPly = null;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
+});
+
+reviewPrevPlyBtn?.addEventListener("click", () => {
+  reviewState.ply = Math.max(0, reviewState.ply - 1);
+  reviewState.focusPly = null;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
+});
+
+reviewNextPlyBtn?.addEventListener("click", () => {
+  reviewState.ply += 1;
+  reviewState.focusPly = null;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
+});
+
+reviewLastPlyBtn?.addEventListener("click", () => {
+  reviewState.ply = Number.MAX_SAFE_INTEGER;
+  reviewState.focusPly = null;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
 });
 
 createBattleBtn.addEventListener("click", () => {
@@ -2380,17 +2475,37 @@ reviewGameSelect?.addEventListener("change", () => {
   reviewState.gameId = reviewGameSelect.value || null;
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
+  uiState.reviewTimelineActivePly = null;
   renderCache.reviewBoardKey = "";
   renderReviewResult();
 });
 
 reviewResultEl?.addEventListener("click", (event) => {
+  const filterBtn = event.target?.closest?.("[data-review-filter]");
+  if (filterBtn) {
+    const filter = String(filterBtn.dataset.reviewFilter || "all");
+    uiState.reviewTimelineFilter = ["all", "best", "inaccuracy", "mistake", "risk"].includes(filter)
+      ? filter
+      : "all";
+    uiState.reviewTimelineActivePly = null;
+    renderReviewResult();
+    return;
+  }
+  const markerBtn = event.target?.closest?.("[data-review-marker]");
+  if (markerBtn) {
+    const ply = Number(markerBtn.dataset.reviewMarker || "");
+    if (!Number.isInteger(ply) || ply <= 0) return;
+    uiState.reviewTimelineActivePly = ply;
+    renderReviewResult();
+    return;
+  }
   const btn = event.target?.closest?.("[data-review-ply]");
   if (!btn) return;
   const ply = Number(btn.dataset.reviewPly || "");
   if (!Number.isInteger(ply) || ply <= 0) return;
   reviewState.ply = ply;
   reviewState.focusPly = ply;
+  uiState.reviewTimelineActivePly = ply;
   renderCache.reviewBoardKey = "";
   renderReviewResult();
 });
