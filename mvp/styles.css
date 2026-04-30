@@ -1012,19 +1012,27 @@ hr {
 }
 
 .timeline-mark.tone-best {
-  background: #9bc989;
+  background: #66b883;
+  border-color: #2f7a4f;
+  box-shadow: 0 0 0 1px rgba(47, 122, 79, 0.2);
 }
 
 .timeline-mark.tone-inaccuracy {
-  background: #d8c16d;
+  background: #f0c85a;
+  border-color: #8a6b22;
+  box-shadow: 0 0 0 1px rgba(138, 107, 34, 0.2);
 }
 
 .timeline-mark.tone-mistake {
-  background: #d97b6a;
+  background: #e06262;
+  border-color: #922b2b;
+  box-shadow: 0 0 0 1px rgba(146, 43, 43, 0.24);
 }
 
 .timeline-mark.tone-risk {
-  background: #d09c58;
+  background: #f08b4f;
+  border-color: #9a4f24;
+  box-shadow: 0 0 0 1px rgba(154, 79, 36, 0.24);
 }
 
 .timeline-mark.is-active {

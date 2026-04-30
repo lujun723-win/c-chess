@@ -82,6 +82,9 @@ const reviewSetupPanel = document.getElementById("review-setup-panel");
 const reviewToggleSetupBtn = document.getElementById("review-toggle-setup-btn");
 const reviewShowOverviewBtn = document.getElementById("review-show-overview-btn");
 const reviewShowKeypointsBtn = document.getElementById("review-show-keypoints-btn");
+const reviewSideBothBtn = document.getElementById("review-side-both-btn");
+const reviewSideRedBtn = document.getElementById("review-side-red-btn");
+const reviewSideBlackBtn = document.getElementById("review-side-black-btn");
 const reviewBoardEl = document.getElementById("review-board-points");
 const reviewBoardStatus = document.getElementById("review-board-status");
 const reviewTimelineEl = document.getElementById("review-timeline");
@@ -166,6 +169,7 @@ const uiState = {
   hintCacheKey: "",
   hintCacheText: "暂无提示",
   reviewTimelineFilter: "all",
+  reviewSideFilter: "both", // both | r | b
   reviewTimelineActivePly: null,
   reviewPanelMode: "overview", // overview | keypoints
   reviewSetupCollapsed: false,
@@ -371,6 +375,15 @@ function updateReviewControls() {
   if (reviewSetupPanel) reviewSetupPanel.hidden = !!uiState.reviewSetupCollapsed;
   if (reviewToggleSetupBtn) {
     reviewToggleSetupBtn.textContent = uiState.reviewSetupCollapsed ? "选局" : "收起选局";
+  }
+  if (reviewSideBothBtn) {
+    reviewSideBothBtn.classList.toggle("is-active", uiState.reviewSideFilter === "both");
+  }
+  if (reviewSideRedBtn) {
+    reviewSideRedBtn.classList.toggle("is-active", uiState.reviewSideFilter === "r");
+  }
+  if (reviewSideBlackBtn) {
+    reviewSideBlackBtn.classList.toggle("is-active", uiState.reviewSideFilter === "b");
   }
   if (reviewShowOverviewBtn) {
     reviewShowOverviewBtn.classList.toggle("is-active", uiState.reviewPanelMode === "overview");
@@ -1220,12 +1233,94 @@ function timelineTone(item, assessment) {
   return "best";
 }
 
-function buildTimelineModel(report, game, filter) {
+function reviewSideText(sideFilter) {
+  if (sideFilter === "r") return "红方";
+  if (sideFilter === "b") return "黑方";
+  return "双方";
+}
+
+function normalizeReviewSideFilter(sideFilter) {
+  return sideFilter === "r" || sideFilter === "b" ? sideFilter : "both";
+}
+
+function matchReviewSide(side, sideFilter) {
+  if (sideFilter === "both") return true;
+  return side === sideFilter;
+}
+
+function shouldIncludeTimelineMarkByFilter(item, assessment, filter, sideFilter) {
+  if (!matchReviewSide(item?.side, sideFilter)) return false;
+  return shouldIncludeTimelineMark(item, assessment, filter);
+}
+
+function buildReviewSideStats(report, game, sideFilter) {
+  const stats = {
+    quality: { best: 0, inaccuracy: 0, mistake: 0 },
+    risks: { materialLoss: 0, checkThreat: 0 },
+    phases: {
+      opening: { best: 0, inaccuracy: 0, mistake: 0 },
+      middlegame: { best: 0, inaccuracy: 0, mistake: 0 },
+      endgame: { best: 0, inaccuracy: 0, mistake: 0 },
+    },
+    topIssues: [],
+    suggestions: [],
+  };
+  const tagCounter = new Map();
+  const pushTag = (tag) => {
+    if (!tag) return;
+    tagCounter.set(tag, (tagCounter.get(tag) || 0) + 1);
+  };
+  const filteredItems = report.items.filter((item) => matchReviewSide(item.side, sideFilter));
+  for (const item of filteredItems) {
+    const idx = item.ply - 1;
+    const assessment = game.moves[idx]?.assessment || null;
+    const quality = assessment?.quality || item.quality || "";
+    if (quality === "best") stats.quality.best += 1;
+    else if (quality === "inaccuracy") stats.quality.inaccuracy += 1;
+    else if (quality === "mistake") stats.quality.mistake += 1;
+    if (
+      item.risks.includes("落点可能被吃") ||
+      item.risks.includes("三步内可能净亏交换") ||
+      item.risks.includes("下一步可能被吃")
+    ) {
+      stats.risks.materialLoss += 1;
+      pushTag("送子风险");
+    }
+    if (item.risks.includes("下一步可能被将")) {
+      stats.risks.checkThreat += 1;
+      pushTag("被将风险");
+    }
+    const phase =
+      item.ply <= 12
+        ? stats.phases.opening
+        : item.ply <= 30
+          ? stats.phases.middlegame
+          : stats.phases.endgame;
+    if (quality === "best") phase.best += 1;
+    else if (quality === "inaccuracy") phase.inaccuracy += 1;
+    else if (quality === "mistake") phase.mistake += 1;
+    item.autoTags.forEach(pushTag);
+    item.manualTags.forEach((tag) => pushTag(tag?.tag));
+  }
+  stats.topIssues = [...tagCounter.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag, count]) => ({ tag, count }));
+  if (tagCounter.get("送子风险")) stats.suggestions.push("优先训练“子力安全检查”：每步先看落点是否出现净亏交换。");
+  if (tagCounter.get("反复调子")) stats.suggestions.push("减少无效调子：同子二次往返前先确认是否带来实质收益。");
+  if (tagCounter.get("应将")) stats.suggestions.push("在受将场景下优先考虑“先解将，再争先”。");
+  if (stats.quality.mistake >= 3) stats.suggestions.push("先把明显失误最多的 3 手单独重摆一遍，比泛看全盘更容易提升。");
+  if (stats.risks.checkThreat >= 2) stats.suggestions.push("补一轮“将军前后 1 手”专项训练，强化先看将再看吃子的习惯。");
+  if (!stats.suggestions.length) stats.suggestions.push("当前筛选下暂无高风险项，可继续放大过滤看对侧走法。");
+  return { ...stats, filteredItems };
+}
+
+function buildTimelineModel(report, game, filter, sideFilter) {
   const total = Math.max(1, report.totalPly);
   const marks = [];
   for (const item of report.items) {
     const assessment = game.moves[item.ply - 1]?.assessment || null;
-    if (!shouldIncludeTimelineMark(item, assessment, filter)) continue;
+    if (!shouldIncludeTimelineMarkByFilter(item, assessment, filter, sideFilter)) continue;
     marks.push({
       ply: item.ply,
       side: item.side,
@@ -1239,61 +1334,66 @@ function buildTimelineModel(report, game, filter) {
 }
 
 function buildReviewHtml(report, game) {
-  const issueRows = report.topIssues.length
-    ? report.topIssues.map((x) => `<li>${escapeHtml(x.tag)} × ${x.count}</li>`).join("")
-    : "<li>暂无明显高频问题</li>";
-  const suggestionRows = report.suggestions.length
-    ? report.suggestions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
-    : "<li>暂无</li>";
+  const sideFilter = normalizeReviewSideFilter(uiState.reviewSideFilter);
   const filter = uiState.reviewTimelineFilter || "all";
-
-  const keyRows = report.keyMoments.length
-    ? report.keyMoments
-        .slice(0, 6)
-        .map((km) => {
-          const idx = km.ply - 1;
-          const item = report.items[idx];
-          const assessment = game.moves[idx]?.assessment || null;
-          const from = Math.max(1, km.ply - 2);
-          const to = Math.min(report.items.length, km.ply + 2);
-          const around = [];
-          for (let p = from; p <= to; p += 1) {
-            const pt = report.items[p - 1];
-            if (pt) around.push(`${p}. ${pt.side === "r" ? "红" : "黑"}${pt.notation}`);
-          }
-          const lineText = assessment?.threePly?.line?.length
-            ? assessment.threePly.line.join(" -> ")
-            : "暂无稳定预演线";
-          const activeClass = reviewState.focusPly === km.ply ? " is-focus" : "";
-          return `<article class="review-key-node${activeClass}">
-            <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
-            <button type="button" class="review-jump-btn compact-btn" data-review-ply="${km.ply}">跳到该手局面</button>
-            <p><strong>局势影响：</strong>${escapeHtml(describeImpactFromAssessment(assessment))}</p>
-            <p><strong>关键窗口：</strong>${escapeHtml(around.join(" ｜ "))}</p>
-            <p><strong>推演：</strong>${escapeHtml(lineText)}</p>
-            <p><strong>复盘指导：</strong>${escapeHtml(reviewCoachAdvice(item, assessment))}</p>
-          </article>`;
-        })
-        .join("")
-    : `<p class="review-empty">暂无明显关键节点，建议先从“有更优/失误”的走法做专项复盘。</p>`;
+  const sideStats = buildReviewSideStats(report, game, sideFilter);
+  const issueRows = sideStats.topIssues.length
+    ? sideStats.topIssues.map((x) => `<li>${escapeHtml(x.tag)} × ${x.count}</li>`).join("")
+    : "<li>暂无明显高频问题</li>";
+  const suggestionRows = sideStats.suggestions.length
+    ? sideStats.suggestions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
+    : "<li>暂无</li>";
+  const timeline = buildTimelineModel(report, game, filter, sideFilter);
+  const activePly = timeline.marks.find((m) => m.ply === uiState.reviewTimelineActivePly)?.ply || null;
+  const activeItem = activePly === null ? null : report.items[activePly - 1] || null;
+  const keyRows = activeItem
+    ? (() => {
+        const km = activeItem;
+        const idx = km.ply - 1;
+        const item = report.items[idx];
+        const assessment = game.moves[idx]?.assessment || null;
+        const from = Math.max(1, km.ply - 2);
+        const to = Math.min(report.items.length, km.ply + 2);
+        const around = [];
+        for (let p = from; p <= to; p += 1) {
+          const pt = report.items[p - 1];
+          if (!pt || !matchReviewSide(pt.side, sideFilter)) continue;
+          around.push(`${p}. ${pt.side === "r" ? "红" : "黑"}${pt.notation}`);
+        }
+        const lineText = assessment?.threePly?.line?.length
+          ? assessment.threePly.line.join(" -> ")
+          : "暂无稳定预演线";
+        const activeClass = reviewState.focusPly === km.ply ? " is-focus" : "";
+        return `<article class="review-key-node${activeClass}">
+          <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
+          <button type="button" class="review-jump-btn compact-btn" data-review-ply="${km.ply}">跳到该手局面</button>
+          <p><strong>局势影响：</strong>${escapeHtml(describeImpactFromAssessment(assessment))}</p>
+          <p><strong>关键窗口：</strong>${escapeHtml(around.join(" ｜ ") || "暂无")}</p>
+          <p><strong>推演：</strong>${escapeHtml(lineText)}</p>
+          <p><strong>复盘指导：</strong>${escapeHtml(reviewCoachAdvice(item, assessment))}</p>
+        </article>`;
+      })()
+    : `<p class="review-empty">当前筛选下没有可展示的关键点。点击时间线标记可切换查看。</p>`;
 
   const overviewHtml = `
     <details class="review-section" open>
       <summary>总览</summary>
       <div class="review-section-body">
-        <p class="review-headline">${escapeHtml(report.gameName)} · ${gameModeText(report.mode)} · ${gameStatusText(
+        <p class="review-headline">${escapeHtml(report.gameName)} · ${reviewSideText(sideFilter)} · ${gameModeText(
+          report.mode,
+        )} · ${gameStatusText(
           report.status,
         )} · 共 ${report.totalPly} 手</p>
         <div class="review-kpi-grid">
-          <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${report.quality.best}</strong></button>
-          <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${report.quality.inaccuracy}</strong></button>
-          <button type="button" class="review-filter-chip${filter === "mistake" ? " is-active" : ""}" data-review-filter="mistake"><span>失误</span><strong>${report.quality.mistake}</strong></button>
-          <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${report.risks.materialLoss + report.risks.checkThreat}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${sideStats.quality.best}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${sideStats.quality.inaccuracy}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "mistake" ? " is-active" : ""}" data-review-filter="mistake"><span>失误</span><strong>${sideStats.quality.mistake}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${sideStats.risks.materialLoss + sideStats.risks.checkThreat}</strong></button>
         </div>
         <button type="button" class="compact-btn review-filter-reset${filter === "all" ? " is-active" : ""}" data-review-filter="all">显示全部关键点</button>
-        <p>开局：最优 ${report.phases.opening.best} / 有更优 ${report.phases.opening.inaccuracy} / 失误 ${report.phases.opening.mistake}</p>
-        <p>中局：最优 ${report.phases.middlegame.best} / 有更优 ${report.phases.middlegame.inaccuracy} / 失误 ${report.phases.middlegame.mistake}</p>
-        <p>收官：最优 ${report.phases.endgame.best} / 有更优 ${report.phases.endgame.inaccuracy} / 失误 ${report.phases.endgame.mistake}</p>
+        <p>开局：最优 ${sideStats.phases.opening.best} / 有更优 ${sideStats.phases.opening.inaccuracy} / 失误 ${sideStats.phases.opening.mistake}</p>
+        <p>中局：最优 ${sideStats.phases.middlegame.best} / 有更优 ${sideStats.phases.middlegame.inaccuracy} / 失误 ${sideStats.phases.middlegame.mistake}</p>
+        <p>收官：最优 ${sideStats.phases.endgame.best} / 有更优 ${sideStats.phases.endgame.inaccuracy} / 失误 ${sideStats.phases.endgame.mistake}</p>
         <div class="review-two-col">
           <section><h5>高频问题</h5><ul>${issueRows}</ul></section>
           <section><h5>训练建议</h5><ul>${suggestionRows}</ul></section>
@@ -1314,7 +1414,8 @@ function buildReviewHtml(report, game) {
 
 function buildReviewTimelineHtml(report, game) {
   const filter = uiState.reviewTimelineFilter || "all";
-  const timeline = buildTimelineModel(report, game, filter);
+  const sideFilter = normalizeReviewSideFilter(uiState.reviewSideFilter);
+  const timeline = buildTimelineModel(report, game, filter, sideFilter);
   if (!timeline.marks.some((m) => m.ply === uiState.reviewTimelineActivePly)) {
     uiState.reviewTimelineActivePly = timeline.marks[0]?.ply || null;
   }
@@ -2365,6 +2466,7 @@ lastPlyBtn.addEventListener("click", () => {
 analyzeGameBtn.addEventListener("click", () => {
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
+  uiState.reviewSideFilter = "both";
   uiState.reviewTimelineActivePly = null;
   uiState.reviewPanelMode = "overview";
   uiState.reviewSetupCollapsed = true;
@@ -2384,6 +2486,24 @@ reviewShowOverviewBtn?.addEventListener("click", () => {
 
 reviewShowKeypointsBtn?.addEventListener("click", () => {
   uiState.reviewPanelMode = "keypoints";
+  renderReviewResult();
+});
+
+reviewSideBothBtn?.addEventListener("click", () => {
+  uiState.reviewSideFilter = "both";
+  uiState.reviewTimelineActivePly = null;
+  renderReviewResult();
+});
+
+reviewSideRedBtn?.addEventListener("click", () => {
+  uiState.reviewSideFilter = "r";
+  uiState.reviewTimelineActivePly = null;
+  renderReviewResult();
+});
+
+reviewSideBlackBtn?.addEventListener("click", () => {
+  uiState.reviewSideFilter = "b";
+  uiState.reviewTimelineActivePly = null;
   renderReviewResult();
 });
 
@@ -2498,6 +2618,7 @@ reviewGameSelect?.addEventListener("change", () => {
   reviewState.gameId = reviewGameSelect.value || null;
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
+  uiState.reviewSideFilter = "both";
   uiState.reviewTimelineActivePly = null;
   uiState.reviewPanelMode = "overview";
   uiState.reviewSetupCollapsed = false;
