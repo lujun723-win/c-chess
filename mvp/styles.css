@@ -640,11 +640,11 @@ hr {
 
 .game-play-surface {
   position: relative;
-  grid-template-columns: minmax(320px, 520px) minmax(200px, 1fr);
+  grid-template-columns: minmax(300px, 480px) minmax(200px, 1fr);
 }
 
 .game-board-column {
-  width: min(100%, 520px);
+  width: min(100%, 480px);
 }
 
 .board-action-strip {
@@ -713,7 +713,7 @@ hr {
 
 @media (min-width: 1024px) and (orientation: landscape) {
   .game-live-panel {
-    grid-template-columns: minmax(320px, 520px) minmax(240px, 1fr);
+    grid-template-columns: minmax(300px, 480px) minmax(240px, 1fr);
     align-items: start;
     column-gap: 12px;
   }
@@ -813,7 +813,7 @@ hr {
 
 .xiangqi-board {
   position: relative;
-  width: min(100%, 500px);
+  width: min(100%, 450px);
   aspect-ratio: 400 / 500;
   margin: 0 auto;
   border: 2px solid #7d5f44;
