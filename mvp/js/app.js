@@ -1567,6 +1567,31 @@ function setupNavigation() {
   quickGoFamilyBtn?.addEventListener("click", () => activateView("family-card"));
 }
 
+boardEl?.addEventListener("click", (event) => {
+  const cell = event.target?.closest?.(".cell");
+  if (!cell) return;
+  const row = Number(cell.dataset.row);
+  const col = Number(cell.dataset.col);
+  if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+  const snap = getLiveGameSnapshot();
+  if (!snap) return;
+  const code = snap.board?.[row]?.[col] || "";
+  onBoardCellClick(row, col, code, snap);
+});
+
+battleBoardEl?.addEventListener("click", (event) => {
+  const cell = event.target?.closest?.(".cell");
+  if (!cell) return;
+  const row = Number(cell.dataset.row);
+  const col = Number(cell.dataset.col);
+  if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+  const snap = getLiveBattleSnapshot();
+  if (!snap || !battleState.battleId) return;
+  const role = getBattleRole(battleState.battleId);
+  const code = snap.board?.[row]?.[col] || "";
+  onBattleCellClick(row, col, code, snap, role);
+});
+
 document.getElementById("register-form").addEventListener("submit", (e) => {
   e.preventDefault();
   try {
