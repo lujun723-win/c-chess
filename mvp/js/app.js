@@ -221,11 +221,11 @@ function renderTrendBar(snap) {
   }
   const redAdvantage = uiState.trendEvalScore;
   if (snap.latestAssessment && snap.latestMove) {
-    const mover = snap.latestMove.side;
+    const mover = snap.latestMove.piece?.[0] || snap.latestMove.side;
     const gap = Number(snap.latestAssessment.scoreGap || 0);
     if (snap.latestAssessment.quality === "mistake" && gap >= 2.2) {
       setTrendBadge(`${mover === "r" ? "红方" : "黑方"}失误`, "warn");
-    } else if (snap.latestAssessment.quality === "best" && gap <= 0.15) {
+    } else if (snap.latestAssessment.brilliant === true) {
       setTrendBadge(`${mover === "r" ? "红方" : "黑方"}妙手`, "praise");
     }
   }
@@ -1088,6 +1088,7 @@ function describeScoreGap(gap) {
 function formatAssessment(assessment, latestMoveNotation = "") {
   if (!assessment) return "";
   const riskText = assessment.risks?.length ? assessment.risks.join("、") : "暂无";
+  const qualityText = assessment.brilliant ? `${assessment.qualityLabel}（妙手）` : assessment.qualityLabel;
   const moveText = latestMoveNotation || "无";
   const bestText = assessment.bestMoveNotation || "无";
   const threePlyText = assessment.threePly
@@ -1109,15 +1110,16 @@ function formatAssessment(assessment, latestMoveNotation = "") {
         ? "对比：你这步就是参考最优。"
         : `对比：你走了「${latestMoveNotation}」，参考最优是「${assessment.bestMoveNotation}」。`
       : "对比：当前缺少可比对的完整信息。";
-  return `最近一步：${moveText}\n质量：${assessment.qualityLabel}\n差值解读：${describeScoreGap(
+  return `最近一步：${moveText}\n质量：${qualityText}\n差值解读：${describeScoreGap(
     assessment.scoreGap,
   )}\n风险：${riskText}\n参考最优：${bestText}${threePlyText}\n${compareText}`;
 }
 
 function formatAssessmentInline(assessment) {
   if (!assessment) return "";
+  const qualityText = assessment.brilliant ? `${assessment.qualityLabel}|妙手` : assessment.qualityLabel;
   const riskText = assessment.risks?.length ? `，风险:${assessment.risks.join("/")}` : "";
-  return ` [${assessment.qualityLabel}${riskText}]`;
+  return ` [${qualityText}${riskText}]`;
 }
 
 function renderBattleList() {

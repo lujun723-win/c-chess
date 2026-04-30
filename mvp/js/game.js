@@ -494,7 +494,7 @@ const AI_LEVELS = {
     topPool: 1,
   },
 };
-const ASSESSMENT_ENGINE_VERSION = "xqwlight-v3";
+const ASSESSMENT_ENGINE_VERSION = "xqwlight-v4";
 const RISK_MATERIAL_LOSS = "落点净亏风险";
 const RISK_THREE_PLY = "三步预演存在战术亏损";
 const UNDO_LIMIT_PER_USER = 3;
@@ -841,6 +841,44 @@ function scoreMoveByFallback(boardBefore, move, side, evalDepth, preRanked = nul
   return -negamax(boardAfter, oppositeSide(side), effectiveDepth - 1, -Infinity, Infinity);
 }
 
+function secondBestScore(scoredMoves, bestMove) {
+  if (!Array.isArray(scoredMoves) || !scoredMoves.length) return null;
+  for (const item of scoredMoves) {
+    if (!item?.move || !Number.isFinite(item.score)) continue;
+    if (bestMove && sameMove(item.move, bestMove)) continue;
+    return item.score;
+  }
+  return null;
+}
+
+function classifyBrilliantMove({
+  qualityKey,
+  risks,
+  immediateNetLoss,
+  threePly,
+  gainedMaterial,
+  boardAfter,
+  side,
+  bestScore,
+  secondScore,
+}) {
+  if (qualityKey !== "best") return false;
+  if (Array.isArray(risks) && risks.length > 0) return false;
+  if (immediateNetLoss > 0.2) return false;
+  if (threePly?.movedPieceCaptured) return false;
+  if ((threePly?.netSwing || 0) < 0.2) return false;
+
+  const enemy = oppositeSide(side);
+  const givesCheck = isInCheck(boardAfter, enemy);
+  const winsMaterialNow = gainedMaterial >= 2.5;
+  const gainsInitiative = (threePly?.netSwing || 0) >= 1.2;
+  if (!givesCheck && !winsMaterialNow && !gainsInitiative) return false;
+
+  const margin = Number.isFinite(bestScore) && Number.isFinite(secondScore) ? bestScore - secondScore : 0;
+  if (margin < 1.1) return false;
+  return true;
+}
+
 function bestRecaptureValue(boardAfterEnemyCapture, row, col, side) {
   const recaptures = legalCapturesToSquare(boardAfterEnemyCapture, row, col, side);
   if (!recaptures.length) return 0;
@@ -1165,11 +1203,30 @@ function assessMove(boardBefore, rawMove, side, evalDepth, preRanked = null, ext
   if (quality.key === "mistake" && shouldDownrankOpeningMistake(boardBefore, boardAfter, rawMove, side)) {
     quality = { key: "inaccuracy", label: "有更优" };
   }
+  const secondScore = secondBestScore(scoredMoves, bestMove);
+  const scoreMargin =
+    Number.isFinite(safeBestScore) && Number.isFinite(secondScore)
+      ? Number((safeBestScore - secondScore).toFixed(2))
+      : null;
+  const brilliant = classifyBrilliantMove({
+    qualityKey: quality.key,
+    risks,
+    immediateNetLoss,
+    threePly,
+    gainedMaterial,
+    boardAfter,
+    side,
+    bestScore: safeBestScore,
+    secondScore,
+  });
 
   return {
     quality: quality.key,
     qualityLabel: quality.label,
+    brilliant,
+    brilliantLabel: brilliant ? "妙手" : "",
     scoreGap: Number(scoreGap.toFixed(2)),
+    scoreMargin,
     evalDepth,
     risks,
     immediateNetLoss: Number(immediateNetLoss.toFixed(2)),
