@@ -82,7 +82,6 @@ const reviewSetupPanel = document.getElementById("review-setup-panel");
 const reviewToggleSetupBtn = document.getElementById("review-toggle-setup-btn");
 const reviewShowOverviewBtn = document.getElementById("review-show-overview-btn");
 const reviewShowKeypointsBtn = document.getElementById("review-show-keypoints-btn");
-const reviewShowAllBtn = document.getElementById("review-show-all-btn");
 const reviewBoardEl = document.getElementById("review-board-points");
 const reviewBoardStatus = document.getElementById("review-board-status");
 const reviewTimelineEl = document.getElementById("review-timeline");
@@ -168,7 +167,7 @@ const uiState = {
   hintCacheText: "暂无提示",
   reviewTimelineFilter: "all",
   reviewTimelineActivePly: null,
-  reviewPanelMode: "overview", // overview | keypoints | step
+  reviewPanelMode: "overview", // overview | keypoints
   reviewSetupCollapsed: false,
 };
 
@@ -378,9 +377,6 @@ function updateReviewControls() {
   }
   if (reviewShowKeypointsBtn) {
     reviewShowKeypointsBtn.classList.toggle("is-active", uiState.reviewPanelMode === "keypoints");
-  }
-  if (reviewShowAllBtn) {
-    reviewShowAllBtn.classList.toggle("is-active", uiState.reviewPanelMode === "step");
   }
 }
 
@@ -1312,17 +1308,7 @@ function buildReviewHtml(report, game) {
         ${keyRows}
       </div>
     </details>`;
-  const stepHtml = `
-    <details class="review-section" open>
-      <summary>Step By Step</summary>
-      <div class="review-section-body">
-        <p class="review-note">用下方按钮逐手切换。当前一步的信息显示在左侧棋盘下的信息条。</p>
-        <p class="review-note">建议节奏：先看一步质量和影响，再结合时间轴关键点做对照。</p>
-      </div>
-    </details>`;
-
   if (uiState.reviewPanelMode === "keypoints") return keypointsHtml;
-  if (uiState.reviewPanelMode === "step") return stepHtml;
   return overviewHtml;
 }
 
@@ -2398,11 +2384,6 @@ reviewShowOverviewBtn?.addEventListener("click", () => {
 
 reviewShowKeypointsBtn?.addEventListener("click", () => {
   uiState.reviewPanelMode = "keypoints";
-  renderReviewResult();
-});
-
-reviewShowAllBtn?.addEventListener("click", () => {
-  uiState.reviewPanelMode = "step";
   renderReviewResult();
 });
 
