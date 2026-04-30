@@ -164,7 +164,11 @@ let aiWakeTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
 let trendBadgeTimer = null;
-const MOVE_FX_DURATION_MS = 360;
+const IOS_SAFARI =
+  /iP(hone|ad|od)/.test(navigator.userAgent) &&
+  /Safari/.test(navigator.userAgent) &&
+  !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+const MOVE_FX_DURATION_MS = IOS_SAFARI ? 240 : 360;
 const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
 let sfxUnlocked = false;
@@ -357,25 +361,12 @@ function mountHintCardNearHud() {
   }
 }
 
-function selectedPointKey(selected) {
-  return Array.isArray(selected) ? selected.join(",") : "";
-}
-
 function gameBoardRenderKey(snap) {
-  return [
-    boardMatrixKey(snap.board),
-    snap.checkedSide || "",
-    selectedPointKey(gameState.selected),
-    snap.mode === "ai" && snap.aiThinking ? snap.turn : "",
-  ].join("::");
+  return [boardMatrixKey(snap.board), snap.checkedSide || ""].join("::");
 }
 
 function battleBoardRenderKey(snap) {
-  return [
-    boardMatrixKey(snap.board),
-    snap.checkedSide || "",
-    selectedPointKey(battleState.selected),
-  ].join("::");
+  return [boardMatrixKey(snap.board), snap.checkedSide || ""].join("::");
 }
 
 function reviewBoardRenderKey(snap) {
@@ -414,6 +405,26 @@ function findPiecePoint(board, pieceCode) {
     }
   }
   return null;
+}
+
+function syncBoardSelection(boardPointsEl, selected) {
+  if (!boardPointsEl) return;
+  boardPointsEl.querySelectorAll(".cell.selected").forEach((node) => node.classList.remove("selected"));
+  if (!Array.isArray(selected)) return;
+  const [row, col] = selected;
+  const node = findCellNode(boardPointsEl, row, col);
+  node?.classList.add("selected");
+}
+
+function syncThinkingBubble(boardPointsEl, snap) {
+  if (!boardPointsEl) return;
+  boardPointsEl.querySelectorAll(".thinking-bubble").forEach((node) => node.remove());
+  if (!(snap?.mode === "ai" && snap.aiThinking)) return;
+  const kingPoint = findPiecePoint(snap.board, `${snap.turn}K`);
+  if (!kingPoint) return;
+  const [kingRow, kingCol] = kingPoint;
+  const bubble = createFxNode("thinking-bubble", kingRow, kingCol, "思考中");
+  boardPointsEl.appendChild(bubble);
 }
 
 function ensureSfxContext() {
@@ -635,8 +646,10 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
       const burst = createFxNode("capture-burst", toRow, toCol);
       const shock = createFxNode("capture-shockwave", toRow, toCol);
       boardPointsEl.appendChild(burst);
-      boardPointsEl.appendChild(shock);
-      spawnCaptureParticles(boardPointsEl, toRow, toCol, 16);
+      if (!IOS_SAFARI) {
+        boardPointsEl.appendChild(shock);
+      }
+      spawnCaptureParticles(boardPointsEl, toRow, toCol, IOS_SAFARI ? 8 : 16);
       setTimeout(() => burst.remove(), 440);
       setTimeout(() => shock.remove(), 520);
     }, impactDelayMs);
@@ -1241,15 +1254,9 @@ function renderBoard() {
           boardEl.appendChild(cell);
         }
       }
-      if (snap.mode === "ai" && snap.aiThinking) {
-        const kingPoint = findPiecePoint(snap.board, `${snap.turn}K`);
-        if (kingPoint) {
-          const [kingRow, kingCol] = kingPoint;
-          const bubble = createFxNode("thinking-bubble", kingRow, kingCol, "思考中");
-          boardEl.appendChild(bubble);
-        }
-      }
     }
+    syncBoardSelection(boardEl, gameState.selected);
+    syncThinkingBubble(boardEl, snap);
     maybeAnimateLatestMove("game", game.id, snap, boardEl);
     firstPlyBtn.disabled = snap.index === 0;
     prevPlyBtn.disabled = snap.index === 0;
@@ -1339,6 +1346,7 @@ function renderBattleBoard() {
         }
       }
     }
+    syncBoardSelection(battleBoardEl, battleState.selected);
     maybeAnimateLatestMove("battle", battle.id, snap, battleBoardEl);
 
     battleFirstPlyBtn.disabled = snap.index === 0;
@@ -1819,9 +1827,15 @@ toggleSetupBtn?.addEventListener("click", () => {
   updateGamePanelVisibility(true);
 });
 
-boardEl?.addEventListener("click", (event) => {
-  const cell = event.target?.closest?.(".cell");
+function getCellFromEvent(event) {
+  return event.target?.closest?.(".cell") || null;
+}
+
+function handleGameBoardTap(event) {
+  const cell = getCellFromEvent(event);
   if (!cell) return;
+  event.preventDefault?.();
+  cell.blur?.();
   const row = Number(cell.dataset.row);
   const col = Number(cell.dataset.col);
   if (!Number.isInteger(row) || !Number.isInteger(col)) return;
@@ -1829,11 +1843,13 @@ boardEl?.addEventListener("click", (event) => {
   if (!snap) return;
   const code = snap.board?.[row]?.[col] || "";
   onBoardCellClick(row, col, code, snap);
-});
+}
 
-battleBoardEl?.addEventListener("click", (event) => {
-  const cell = event.target?.closest?.(".cell");
+function handleBattleBoardTap(event) {
+  const cell = getCellFromEvent(event);
   if (!cell) return;
+  event.preventDefault?.();
+  cell.blur?.();
   const row = Number(cell.dataset.row);
   const col = Number(cell.dataset.col);
   if (!Number.isInteger(row) || !Number.isInteger(col)) return;
@@ -1842,6 +1858,37 @@ battleBoardEl?.addEventListener("click", (event) => {
   const role = getBattleRole(battleState.battleId);
   const code = snap.board?.[row]?.[col] || "";
   onBattleCellClick(row, col, code, snap, role);
+}
+
+let lastGameTouchAt = 0;
+let lastBattleTouchAt = 0;
+
+boardEl?.addEventListener(
+  "touchstart",
+  (event) => {
+    lastGameTouchAt = Date.now();
+    handleGameBoardTap(event);
+  },
+  { passive: false },
+);
+
+boardEl?.addEventListener("click", (event) => {
+  if (Date.now() - lastGameTouchAt < 450) return;
+  handleGameBoardTap(event);
+});
+
+battleBoardEl?.addEventListener(
+  "touchstart",
+  (event) => {
+    lastBattleTouchAt = Date.now();
+    handleBattleBoardTap(event);
+  },
+  { passive: false },
+);
+
+battleBoardEl?.addEventListener("click", (event) => {
+  if (Date.now() - lastBattleTouchAt < 450) return;
+  handleBattleBoardTap(event);
 });
 
 document.getElementById("register-form").addEventListener("submit", (e) => {
@@ -2237,6 +2284,9 @@ window.addEventListener("pageshow", () => {
 
 setupGameModeControls();
 setupNavigation();
+if (IOS_SAFARI) {
+  document.body.classList.add("ios-safari-perf");
+}
 mountHintCardNearHud();
 renderAll();
 activateView(window.location.hash?.slice(1) || "home-card", { updateHash: false });

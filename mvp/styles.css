@@ -877,7 +877,7 @@ hr {
     #e6c79f;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
   overscroll-behavior: contain;
-  touch-action: none;
+  touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -960,7 +960,7 @@ hr {
   top: 5.405%;
   bottom: 5.405%;
   pointer-events: none;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .cell {
@@ -983,7 +983,7 @@ hr {
   padding: 0;
   transform: translate(-50%, -50%);
   pointer-events: auto;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .cell:hover {
@@ -1143,6 +1143,29 @@ hr {
   pointer-events: none;
   z-index: 18;
   animation: check-callout 2s ease-out forwards;
+}
+
+body.ios-safari-perf .capture-burst {
+  filter: none;
+}
+
+body.ios-safari-perf .capture-particle {
+  box-shadow: none;
+}
+
+body.ios-safari-perf .move-ghost,
+body.ios-safari-perf .cell.red,
+body.ios-safari-perf .cell.black {
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.14);
+}
+
+body.ios-safari-perf .check-callout {
+  text-shadow: 0 0 6px rgba(196, 43, 30, 0.3);
+  -webkit-text-stroke: 0;
+}
+
+body.ios-safari-perf .board-column {
+  position: static;
 }
 
 .thinking-bubble {
