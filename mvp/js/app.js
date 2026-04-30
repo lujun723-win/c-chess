@@ -168,7 +168,7 @@ const uiState = {
   hintCacheText: "暂无提示",
   reviewTimelineFilter: "all",
   reviewTimelineActivePly: null,
-  reviewPanelMode: "all", // all | overview | keypoints
+  reviewPanelMode: "overview", // overview | keypoints | step
   reviewSetupCollapsed: false,
 };
 
@@ -380,7 +380,7 @@ function updateReviewControls() {
     reviewShowKeypointsBtn.classList.toggle("is-active", uiState.reviewPanelMode === "keypoints");
   }
   if (reviewShowAllBtn) {
-    reviewShowAllBtn.classList.toggle("is-active", uiState.reviewPanelMode === "all");
+    reviewShowAllBtn.classList.toggle("is-active", uiState.reviewPanelMode === "step");
   }
 }
 
@@ -1312,10 +1312,18 @@ function buildReviewHtml(report, game) {
         ${keyRows}
       </div>
     </details>`;
+  const stepHtml = `
+    <details class="review-section" open>
+      <summary>Step By Step</summary>
+      <div class="review-section-body">
+        <p class="review-note">用下方按钮逐手切换。当前一步的信息显示在左侧棋盘下的信息条。</p>
+        <p class="review-note">建议节奏：先看一步质量和影响，再结合时间轴关键点做对照。</p>
+      </div>
+    </details>`;
 
-  if (uiState.reviewPanelMode === "overview") return overviewHtml;
   if (uiState.reviewPanelMode === "keypoints") return keypointsHtml;
-  return `${overviewHtml}${keypointsHtml}`;
+  if (uiState.reviewPanelMode === "step") return stepHtml;
+  return overviewHtml;
 }
 
 function buildReviewTimelineHtml(report, game) {
@@ -1346,7 +1354,6 @@ function buildReviewTimelineHtml(report, game) {
       <div class="review-timeline-line"></div>
       ${markerRows}
     </div>
-    <p class="review-note">点击标记点查看信息，再点“跳到该手局面”联动棋盘。</p>
     ${timelinePopup}`;
 }
 
@@ -2373,6 +2380,7 @@ analyzeGameBtn.addEventListener("click", () => {
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
   uiState.reviewTimelineActivePly = null;
+  uiState.reviewPanelMode = "overview";
   uiState.reviewSetupCollapsed = true;
   renderReviewResult();
   updateReviewControls();
@@ -2394,7 +2402,7 @@ reviewShowKeypointsBtn?.addEventListener("click", () => {
 });
 
 reviewShowAllBtn?.addEventListener("click", () => {
-  uiState.reviewPanelMode = "all";
+  uiState.reviewPanelMode = "step";
   renderReviewResult();
 });
 
@@ -2510,6 +2518,7 @@ reviewGameSelect?.addEventListener("change", () => {
   reviewState.ply = Number.MAX_SAFE_INTEGER;
   reviewState.focusPly = null;
   uiState.reviewTimelineActivePly = null;
+  uiState.reviewPanelMode = "overview";
   uiState.reviewSetupCollapsed = false;
   renderCache.reviewBoardKey = "";
   renderReviewResult();

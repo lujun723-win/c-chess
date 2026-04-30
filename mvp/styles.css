@@ -834,8 +834,7 @@ hr {
   display: grid;
   gap: 10px;
   align-content: start;
-  position: sticky;
-  top: 88px;
+  position: static;
 }
 
 .review-board-wrap {
@@ -863,16 +862,22 @@ hr {
   display: grid;
   gap: 10px;
   min-height: 0;
-  max-height: calc(100vh - 104px);
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .review-timeline-panel {
   margin-top: 0;
   min-height: auto;
-  font-size: 13px;
-  color: var(--muted);
+  padding: 2px 0 0;
+}
+
+.review-jump-card {
+  margin-top: 0;
+  min-height: auto;
+  display: grid;
+  gap: 8px;
 }
 
 .review-result-panel {
@@ -1141,6 +1146,14 @@ hr {
 .review-action-strip .compact-btn.is-active {
   border-color: rgba(156, 118, 78, 0.95);
   background: rgba(255, 239, 211, 0.95);
+}
+
+.review-board-status {
+  order: -2;
+}
+
+.review-board-wrap {
+  order: -1;
 }
 
 .review-key-node h5,

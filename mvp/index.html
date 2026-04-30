@@ -383,6 +383,7 @@
               </section>
               <div class="review-surface">
                 <aside class="review-board-pane">
+                  <div id="review-board-status" class="panel review-board-status"></div>
                   <div class="review-board-wrap">
                     <div class="xiangqi-board review-board" aria-label="复盘棋盘（只读）">
                       <div class="file-label file-label-top">
@@ -465,21 +466,22 @@
                       </div>
                     </div>
                   </div>
-                  <div id="review-board-status" class="panel review-board-status"></div>
-                  <div class="board-action-strip review-action-strip">
-                    <button id="review-toggle-setup-btn" class="compact-btn" type="button">选局</button>
-                    <button id="review-show-overview-btn" class="compact-btn" type="button">总览</button>
-                    <button id="review-show-keypoints-btn" class="compact-btn" type="button">关键点</button>
-                    <button id="review-show-all-btn" class="compact-btn" type="button">全部</button>
-                    <button id="review-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
-                    <button id="review-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
-                    <button id="review-next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
-                    <button id="review-last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
+                  <div class="panel review-jump-card">
+                    <div class="board-action-strip review-action-strip">
+                      <button id="review-toggle-setup-btn" class="compact-btn" type="button">选局</button>
+                      <button id="review-show-overview-btn" class="compact-btn" type="button">总览</button>
+                      <button id="review-show-keypoints-btn" class="compact-btn" type="button">关键点</button>
+                      <button id="review-show-all-btn" class="compact-btn" type="button">步骤</button>
+                      <button id="review-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
+                      <button id="review-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
+                      <button id="review-next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
+                      <button id="review-last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
+                    </div>
+                    <div id="review-timeline" class="review-timeline-panel">时间轴：等待分析结果。</div>
                   </div>
-                  <div id="review-step-banner" class="panel review-step-banner">当前：终局局面</div>
                 </aside>
                 <section class="review-info-pane">
-                  <div id="review-timeline" class="panel review-timeline-panel">时间轴：等待分析结果。</div>
+                  <div id="review-step-banner" class="panel review-step-banner">当前：终局局面</div>
                   <div id="review-result" class="panel review-result-panel"></div>
                 </section>
               </div>
