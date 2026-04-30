@@ -80,6 +80,7 @@ const reviewResultEl = document.getElementById("review-result");
 const reviewGameSelect = document.getElementById("review-game-select");
 const reviewSetupPanel = document.getElementById("review-setup-panel");
 const reviewToggleSetupBtn = document.getElementById("review-toggle-setup-btn");
+const reviewSetupContent = document.getElementById("review-setup-content");
 const reviewShowOverviewBtn = document.getElementById("review-show-overview-btn");
 const reviewShowKeypointsBtn = document.getElementById("review-show-keypoints-btn");
 const reviewSideBothBtn = document.getElementById("review-side-both-btn");
@@ -372,9 +373,15 @@ function mountHintCardNearHud() {
 }
 
 function updateReviewControls() {
-  if (reviewSetupPanel) reviewSetupPanel.hidden = !!uiState.reviewSetupCollapsed;
+  if (reviewSetupPanel) {
+    reviewSetupPanel.classList.toggle("is-collapsed", !!uiState.reviewSetupCollapsed);
+  }
+  if (reviewSetupContent) {
+    reviewSetupContent.hidden = !!uiState.reviewSetupCollapsed;
+  }
   if (reviewToggleSetupBtn) {
-    reviewToggleSetupBtn.textContent = uiState.reviewSetupCollapsed ? "选局" : "收起选局";
+    reviewToggleSetupBtn.textContent = uiState.reviewSetupCollapsed ? "选局设置（展开）" : "选局设置（收起）";
+    reviewToggleSetupBtn.setAttribute("aria-expanded", uiState.reviewSetupCollapsed ? "false" : "true");
   }
   if (reviewSideBothBtn) {
     reviewSideBothBtn.classList.toggle("is-active", uiState.reviewSideFilter === "both");

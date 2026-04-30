@@ -376,10 +376,13 @@
         <section class="page-view" id="review-card" data-view="review-card">
           <div class="card">
             <div class="stack">
-              <section id="review-setup-panel" class="surface-card stack">
-                <label for="review-game-select">仅显示已结束并已保存的对局</label>
-                <select id="review-game-select"></select>
-                <button id="analyze-game-btn" type="button">加载并生成复盘分析</button>
+              <section id="review-setup-panel" class="surface-card review-setup-card">
+                <button id="review-toggle-setup-btn" class="review-setup-title" type="button">选局设置</button>
+                <div id="review-setup-content" class="stack review-setup-content">
+                  <label for="review-game-select">仅显示已结束并已保存的对局</label>
+                  <select id="review-game-select"></select>
+                  <button id="analyze-game-btn" type="button">加载并生成复盘分析</button>
+                </div>
               </section>
               <div class="review-surface">
                 <aside class="review-board-pane">
@@ -468,22 +471,27 @@
                   </div>
                   <div class="panel review-jump-card">
                     <div class="board-action-strip review-action-strip">
-                      <button id="review-side-both-btn" class="compact-btn" type="button">双方</button>
-                      <button id="review-side-red-btn" class="compact-btn" type="button">红方</button>
-                      <button id="review-side-black-btn" class="compact-btn" type="button">黑方</button>
-                      <button id="review-toggle-setup-btn" class="compact-btn" type="button">选局</button>
-                      <button id="review-show-overview-btn" class="compact-btn" type="button">总览</button>
-                      <button id="review-show-keypoints-btn" class="compact-btn" type="button">关键点</button>
-                      <button id="review-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
-                      <button id="review-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
-                      <button id="review-next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
-                      <button id="review-last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
+                      <div class="review-side-segment" role="tablist" aria-label="复盘阵营筛选">
+                        <button id="review-side-both-btn" class="compact-btn" type="button">双方</button>
+                        <button id="review-side-red-btn" class="compact-btn" type="button">红方</button>
+                        <button id="review-side-black-btn" class="compact-btn" type="button">黑方</button>
+                      </div>
+                      <div class="review-nav-group">
+                        <button id="review-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
+                        <button id="review-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>
+                        <button id="review-next-ply-btn" class="compact-icon-btn" type="button">&gt;</button>
+                        <button id="review-last-ply-btn" class="compact-icon-btn" type="button">&gt;|</button>
+                      </div>
                     </div>
                     <div id="review-timeline" class="review-timeline-panel">时间轴：等待分析结果。</div>
                     <div id="review-step-banner" class="review-step-banner">当前：终局局面</div>
                   </div>
                 </aside>
                 <section class="review-info-pane">
+                  <div class="review-sheet-tabs">
+                    <button id="review-show-overview-btn" class="compact-btn" type="button">总览</button>
+                    <button id="review-show-keypoints-btn" class="compact-btn" type="button">关键点</button>
+                  </div>
                   <div id="review-result" class="panel review-result-panel"></div>
                 </section>
               </div>

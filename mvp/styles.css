@@ -830,6 +830,28 @@ hr {
   align-items: start;
 }
 
+.review-setup-card {
+  display: grid;
+  gap: 8px;
+}
+
+.review-setup-title {
+  min-height: 38px;
+  border: 1px solid rgba(214, 201, 185, 0.92);
+  border-radius: 10px;
+  background: rgba(252, 247, 239, 0.92);
+  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  color: var(--brand-deep);
+}
+
+.review-setup-content {
+  display: grid;
+  gap: 10px;
+}
+
 .review-board-pane {
   display: grid;
   gap: 10px;
@@ -878,6 +900,35 @@ hr {
   min-height: auto;
   display: grid;
   gap: 8px;
+}
+
+.review-action-strip {
+  justify-content: space-between;
+}
+
+.review-side-segment {
+  display: inline-flex;
+  border: 1px solid rgba(214, 201, 185, 0.92);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(252, 247, 239, 0.88);
+}
+
+.review-side-segment .compact-btn {
+  border: 0;
+  border-right: 1px solid rgba(214, 201, 185, 0.92);
+  border-radius: 0;
+  min-width: 58px;
+}
+
+.review-side-segment .compact-btn:last-child {
+  border-right: 0;
+}
+
+.review-nav-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 6px;
 }
 
 .review-result-panel {
@@ -1155,9 +1206,16 @@ hr {
   padding: 6px 8px;
 }
 
-.review-action-strip .compact-btn.is-active {
+.review-action-strip .compact-btn.is-active,
+.review-sheet-tabs .compact-btn.is-active {
   border-color: rgba(156, 118, 78, 0.95);
   background: rgba(255, 239, 211, 0.95);
+}
+
+.review-sheet-tabs {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .review-board-status {
@@ -1697,6 +1755,14 @@ body.ios-safari-perf .board-column {
 
   .review-surface {
     grid-template-columns: 1fr;
+  }
+
+  .review-action-strip {
+    gap: 8px;
+  }
+
+  .review-sheet-tabs {
+    justify-content: flex-start;
   }
 
   .review-board-pane {
