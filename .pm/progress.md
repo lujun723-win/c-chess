@@ -53,3 +53,8 @@
 - 复盘时间线下方移除重复的标记详情卡，改为承载“第X手/质量/影响”信息条；右侧重复信息已去重。
 - 复盘交互重排：阵营筛选改为单一分段控件；选局收起迁移到选局卡片标题；总览/关键点切换按钮移到右侧信息区作为 sheet tab。
 - 双人对战页按人机对战同构重排：拆分“设置区 + 对战区”，新增对战 HUD、设置折叠、棋谱抽屉、紧凑操作条与最近两步信息。
+- 发布收口包：新增 `test:release-gate`（health/access/db/异常请求/限流）与 `test:release-check`（一键门禁）。
+- 数据运维工具：新增 `tools/backup-db.js`、`tools/restore-db.js`，并接入 `npm run backup:db` / `npm run restore:db`。
+- 发布文档补齐：新增 `docs/DEPLOYMENT.md` 与 `docs/BACKUP_RESTORE.md`，根 README 增加发布前检查与备份恢复入口。
+- 异常兜底增强：前端新增走子防重复提交；双人对战 HUD 增加“实时/轮询兜底”同步状态；后端 `PUT /api/db` 增加串行写与写入限流。
+- 当前环境验证：`npm run test:release-check` 通过（`test:regression` 在旧 Node 运行时自动跳过）。

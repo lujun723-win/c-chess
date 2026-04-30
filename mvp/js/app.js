@@ -188,6 +188,7 @@ const uiState = {
   reviewTimelineActivePly: null,
   reviewPanelMode: "overview", // overview | keypoints
   reviewSetupCollapsed: false,
+  battleRealtimeDegraded: false,
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
@@ -196,6 +197,8 @@ let battleSyncTimer = null;
 let aiWakeTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
+let gameMoveBusy = false;
+let battleMoveBusy = false;
 let trendBadgeTimer = null;
 let iosScrollLockY = null;
 let iosScrollLockUntil = 0;
@@ -1778,6 +1781,7 @@ function renderBattleBoard() {
       : "";
     const undoText = `\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
     const checkText = snap.inCheck ? `\n警告：${sideText(snap.checkedSide)}正在被将军。` : "";
+    const syncText = uiState.battleRealtimeDegraded ? "轮询兜底" : "实时同步";
     const turnLine = `第 ${snap.index} 手 / 共 ${snap.max} 手，${snap.turn === "r" ? "红方" : "黑方"}走子。`;
     battleStatus.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
       role,
@@ -1787,7 +1791,9 @@ function renderBattleBoard() {
     if (battleCoreMetaEl) {
       battleCoreMetaEl.textContent = `房间：${battle.name}\n邀请码：${battle.code}\n我的阵营：${sideText(
         role,
-      )} · 状态：${battleStatusText(snap.status)}\n${turnLine}${battleState.followLatest ? myTurnText : "（回放模式）"}\n悔棋：已用 ${
+      )} · 状态：${battleStatusText(snap.status)} · 同步：${syncText}\n${turnLine}${
+        battleState.followLatest ? myTurnText : "（回放模式）"
+      }\n悔棋：已用 ${
         snap.undoUsed
       }/${snap.undoLimit}，剩余 ${snap.undoRemaining}${snap.inCheck ? ` · ${sideText(snap.checkedSide)}被将` : ""}`;
     }
@@ -1854,6 +1860,10 @@ function setBattleTransientMessage(text) {
 
 function onBoardCellClick(row, col, code, snap) {
   unlockSfxFromGesture();
+  if (gameMoveBusy) {
+    boardStatus.textContent = "正在处理上一步，请稍候。";
+    return;
+  }
   if (snap.index < snap.max) {
     boardStatus.textContent = "当前在回放模式，请先回到最后一步再继续录入。";
     return;
@@ -1884,6 +1894,7 @@ function onBoardCellClick(row, col, code, snap) {
     return;
   }
   try {
+    gameMoveBusy = true;
     lockIosScrollPosition(850);
     makeMove(gameState.gameId, fromRow, fromCol, row, col);
     gameState.selected = null;
@@ -1897,11 +1908,17 @@ function onBoardCellClick(row, col, code, snap) {
     boardStatus.textContent = err.message;
     gameState.selected = null;
     renderBoard();
+  } finally {
+    gameMoveBusy = false;
   }
 }
 
 function onBattleCellClick(row, col, code, snap, role) {
   unlockSfxFromGesture();
+  if (battleMoveBusy) {
+    setBattleTransientMessage("正在处理上一步，请稍候。");
+    return;
+  }
   if (snap.index < snap.max) {
     setBattleTransientMessage("当前在回放模式，请先回到最后一步再继续走子。");
     return;
@@ -1944,6 +1961,7 @@ function onBattleCellClick(row, col, code, snap, role) {
     return;
   }
   try {
+    battleMoveBusy = true;
     lockIosScrollPosition(850);
     makeBattleMove(battleState.battleId, fromRow, fromCol, row, col);
     battleState.selected = null;
@@ -1956,6 +1974,8 @@ function onBattleCellClick(row, col, code, snap, role) {
     setBattleTransientMessage(err.message);
     battleState.selected = null;
     renderBattleBoard();
+  } finally {
+    battleMoveBusy = false;
   }
 }
 
@@ -2204,13 +2224,21 @@ function restartBattleRealtimeChannel() {
   }
   if (typeof EventSource === "undefined") return;
   const source = new EventSource("/api/events");
+  source.onopen = () => {
+    uiState.battleRealtimeDegraded = false;
+    if (battleState.battleId) renderBattleBoard();
+  };
   source.addEventListener("db-updated", () => {
     scheduleBattleSyncFromEvent();
   });
   source.addEventListener("ready", () => {
+    uiState.battleRealtimeDegraded = false;
     scheduleBattleSyncFromEvent();
+    if (battleState.battleId) renderBattleBoard();
   });
   source.onerror = () => {
+    uiState.battleRealtimeDegraded = true;
+    if (battleState.battleId) renderBattleBoard();
     if (source.readyState === EventSource.CLOSED) {
       setTimeout(() => {
         restartBattleRealtimeChannel();

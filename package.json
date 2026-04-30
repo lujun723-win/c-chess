@@ -6,6 +6,10 @@
     "start": "node server/index.js",
     "dev": "node server/index.js",
     "test:regression": "node mvp/tests/assessment-regression.test.js",
-    "test:realtime-sync": "node mvp/tests/realtime-sync.test.js"
+    "test:realtime-sync": "node mvp/tests/realtime-sync.test.js",
+    "test:release-gate": "node mvp/tests/release-gate.test.js",
+    "test:release-check": "node tools/run-release-check.js",
+    "backup:db": "node tools/backup-db.js",
+    "restore:db": "node tools/restore-db.js"
   }
 }

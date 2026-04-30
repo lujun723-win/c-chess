@@ -14,8 +14,12 @@ const DB_PATH = path.join(DATA_DIR, "db.json");
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.HOST || "0.0.0.0";
 const MDNS_ALIAS = (process.env.MDNS_ALIAS || "chess.local").trim().toLowerCase();
+const DB_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.DB_WRITE_RATE_LIMIT_WINDOW_MS || 5000);
+const DB_WRITE_RATE_LIMIT_MAX = Number(process.env.DB_WRITE_RATE_LIMIT_MAX || 80);
 let dbVersion = 0;
 const sseClients = new Set();
+const dbWriteRateBucket = new Map();
+let dbWriteQueue = Promise.resolve();
 
 function defaultDb() {
   return {
@@ -135,12 +139,44 @@ function readBody(req) {
     req.on("data", (chunk) => {
       buf += chunk;
       if (buf.length > 16 * 1024 * 1024) {
-        reject(new Error("Payload too large"));
+        const err = new Error("Payload too large");
+        err.code = "PAYLOAD_TOO_LARGE";
+        reject(err);
       }
     });
     req.on("end", () => resolve(buf));
     req.on("error", reject);
   });
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  if (forwarded) return forwarded;
+  return (req.socket && req.socket.remoteAddress) || "unknown";
+}
+
+function allowDbWrite(req) {
+  const now = Date.now();
+  const ip = getClientIp(req);
+  const bucket = dbWriteRateBucket.get(ip) || [];
+  const recent = bucket.filter((t) => now - t <= DB_WRITE_RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= DB_WRITE_RATE_LIMIT_MAX) {
+    dbWriteRateBucket.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  dbWriteRateBucket.set(ip, recent);
+  return true;
+}
+
+async function enqueueDbWrite(db) {
+  const task = async () => {
+    const stable = await writeDb(db);
+    broadcastDbUpdated("put-db");
+    return stable;
+  };
+  dbWriteQueue = dbWriteQueue.then(task, task);
+  return dbWriteQueue;
 }
 
 function collectLanIPv4() {
@@ -360,6 +396,14 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "PUT" && pathname === "/api/db") {
+      if (!allowDbWrite(req)) {
+        sendJson(res, 429, {
+          error: "写入过于频繁，请稍后重试",
+          windowMs: DB_WRITE_RATE_LIMIT_WINDOW_MS,
+          maxWrites: DB_WRITE_RATE_LIMIT_MAX,
+        });
+        return;
+      }
       const raw = await readBody(req);
       let parsed = null;
       try {
@@ -368,14 +412,17 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "请求体不是合法 JSON" });
         return;
       }
-      const stable = await writeDb(parsed);
-      broadcastDbUpdated("put-db");
+      const stable = await enqueueDbWrite(parsed);
       sendJson(res, 200, stable);
       return;
     }
 
     await serveStatic(req, res, pathname);
   } catch (err) {
+    if (err && err.code === "PAYLOAD_TOO_LARGE") {
+      sendJson(res, 413, { error: "请求体过大" });
+      return;
+    }
     sendJson(res, 500, { error: err instanceof Error ? err.message : "Server error" });
   }
 });

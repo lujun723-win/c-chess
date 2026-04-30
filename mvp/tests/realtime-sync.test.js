@@ -106,11 +106,21 @@ async function waitForServer(port, timeoutMs) {
 }
 
 async function main() {
-  const port = 31110 + Math.floor(Math.random() * 300);
-  const server = spawn("node", ["server/index.js"], {
-    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MDNS_ALIAS: "" },
-    stdio: "ignore",
-  });
+  const port = Number(process.env.TEST_PORT || 3001);
+  let server = null;
+  let useExistingServer = false;
+  try {
+    const health = await requestJson("GET", port, "/api/health");
+    useExistingServer = Boolean(health && health.ok);
+  } catch (_err) {
+    useExistingServer = false;
+  }
+  if (!useExistingServer) {
+    server = spawn("node", ["server/index.js"], {
+      env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MDNS_ALIAS: "" },
+      stdio: "ignore",
+    });
+  }
 
   try {
     await waitForServer(port, 8000);
@@ -140,7 +150,7 @@ async function main() {
     assert.ok(gotUpdate, "should receive db-updated event after PUT /api/db");
     console.log("PASS: realtime SSE db-updated broadcast");
   } finally {
-    server.kill("SIGTERM");
+    if (server) server.kill("SIGTERM");
   }
 }
 
