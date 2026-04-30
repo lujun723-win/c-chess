@@ -36,6 +36,7 @@ import {
   getAiLevels,
   searchJoinableBattles,
   evaluateTrendForRed,
+  getCurrentTurnHint,
 } from "./game.js";
 import { loadDb } from "./store.js";
 
@@ -155,6 +156,8 @@ const uiState = {
   trendBias: 0,
   trendEvalKey: "",
   trendEvalScore: 0,
+  hintCacheKey: "",
+  hintCacheText: "暂无提示",
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
@@ -164,6 +167,8 @@ let aiWakeTimer = null;
 let battleEventsSource = null;
 let battleSyncFromEventTimer = null;
 let trendBadgeTimer = null;
+let iosScrollLockY = null;
+let iosScrollLockUntil = 0;
 const IOS_SAFARI =
   /iP(hone|ad|od)/.test(navigator.userAgent) &&
   /Safari/.test(navigator.userAgent) &&
@@ -296,6 +301,8 @@ function finalizeGameWithSavePrompt({ endReasonText = "对局已结束。" } = {
   uiState.showSetupInGame = false;
   uiState.showHintCard = false;
   uiState.showMoveDrawer = false;
+  uiState.hintCacheKey = "";
+  uiState.hintCacheText = "暂无提示";
   renderAll();
   alert(
     keepRecord
@@ -304,30 +311,18 @@ function finalizeGameWithSavePrompt({ endReasonText = "对局已结束。" } = {
   );
 }
 
-function formatHintDetail(assessment, latestMoveNotation = "") {
-  if (!assessment) return "暂无提示";
+function formatHintDetail(hint, { freeze = false } = {}) {
+  if (!hint) return "暂无提示";
   const lines = [];
-  if (assessment.bestMoveNotation) lines.push(`参考最优：${assessment.bestMoveNotation}`);
-  if (assessment.threePly) {
-    const lineText = assessment.threePly.line?.length
-      ? assessment.threePly.line.join(" -> ")
-      : "无有效主线";
-    lines.push(`三步预演：${lineText}`);
-    lines.push(
-      `局势影响：${
-        assessment.threePly.netSwing > 0
-          ? `对你有利 +${assessment.threePly.netSwing.toFixed(2)}`
-          : `对你不利 ${assessment.threePly.netSwing.toFixed(2)}`
-      }`,
-    );
+  lines.push(`参考最优（你方下一步）：${hint.bestMoveNotation || "无"}`);
+  const lineText = hint.previewLine?.length ? hint.previewLine.join(" -> ") : "无有效主线";
+  lines.push(`关键预演（${Math.min(5, Math.max(2, hint.previewPly || 2))}步内）：${lineText}`);
+  if (Array.isArray(hint.impactDetails) && hint.impactDetails.length) {
+    lines.push(`局势影响：${hint.impactDetails.join("；")}`);
+  } else {
+    lines.push("局势影响：暂无明显战术变化。");
   }
-  if (latestMoveNotation && assessment.bestMoveNotation) {
-    lines.push(
-      latestMoveNotation === assessment.bestMoveNotation
-        ? "对比：这步就是参考最优。"
-        : `对比：你走了「${latestMoveNotation}」，推荐是「${assessment.bestMoveNotation}」。`,
-    );
-  }
+  if (freeze) lines.push("提示已锁定：等待电脑走棋后刷新。");
   return lines.join("\n");
 }
 
@@ -383,6 +378,24 @@ function getLiveBattleSnapshot() {
   if (!battleState.battleId) return null;
   const targetPly = battleState.followLatest ? Number.MAX_SAFE_INTEGER : battleState.ply;
   return getBattleSnapshot(battleState.battleId, targetPly);
+}
+
+function lockIosScrollPosition(durationMs = 800) {
+  if (!IOS_SAFARI) return;
+  iosScrollLockY = window.scrollY;
+  iosScrollLockUntil = Date.now() + Math.max(120, durationMs);
+}
+
+function enforceIosScrollLock() {
+  if (!IOS_SAFARI) return;
+  if (!Number.isFinite(iosScrollLockY) || Date.now() > iosScrollLockUntil) {
+    iosScrollLockY = null;
+    iosScrollLockUntil = 0;
+    return;
+  }
+  const y = iosScrollLockY;
+  window.scrollTo(0, y);
+  requestAnimationFrame(() => window.scrollTo(0, y));
 }
 
 function createFxNode(className, row, col, text = "") {
@@ -732,6 +745,8 @@ function renderSession() {
     battleState.ply = 0;
     battleState.selected = null;
     battleState.followLatest = true;
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
     renderAll();
   });
 }
@@ -792,6 +807,8 @@ function renderGameList() {
   const user = getCurrentUser();
   if (!user) {
     gameSelect.innerHTML = `<option value="">请先登录</option>`;
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
     return;
   }
   let games = [];
@@ -805,6 +822,8 @@ function renderGameList() {
     gameSelect.innerHTML = `<option value="">暂无对局，先新建一个</option>`;
     gameState.gameId = null;
     gameState.followLatest = true;
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
     return;
   }
   gameSelect.innerHTML = games
@@ -815,6 +834,8 @@ function renderGameList() {
     .join("");
   if (!gameState.gameId || !games.some((g) => g.id === gameState.gameId)) {
     gameState.gameId = games[0].id;
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
   }
   gameSelect.value = gameState.gameId;
 }
@@ -1172,6 +1193,9 @@ function renderBoard() {
     renderCache.gameBoardKey = "";
     boardEl.innerHTML = "";
     boardStatus.textContent = "请先新建对局，或从历史对局进入回放。";
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
+    if (hintContentEl) hintContentEl.textContent = "暂无提示";
     undoGameBtn.disabled = true;
     if (resignGameBtn) resignGameBtn.disabled = true;
     renderMoveList();
@@ -1186,6 +1210,7 @@ function renderBoard() {
     const snap = getSnapshot(gameState.gameId, targetPly);
     gameState.ply = snap.index;
     let modeLine = `模式:${gameModeText(snap.mode)}`;
+    const mySideInAi = snap.aiSide === "r" ? "b" : "r";
     if (snap.mode === "ai") {
       const mySide = snap.aiSide === "r" ? "黑方" : "红方";
       modeLine += `（你执${mySide} / 电脑${sideText(snap.aiSide)} / 难度:${
@@ -1216,9 +1241,22 @@ function renderBoard() {
       gameCoreMetaEl.textContent = `${modeLine}\n${turnLine}\n悔棋：已用 ${snap.undoUsed}/${snap.undoLimit}，剩余 ${snap.undoRemaining}`;
     }
     if (hintContentEl) {
-      hintContentEl.textContent = snap.latestAssessment
-        ? formatHintDetail(snap.latestAssessment, snap.latestMoveNotation)
-        : "暂无提示";
+      const isLive = snap.index === snap.max && snap.status !== "finished";
+      const canRefreshHintNow = isLive && (snap.mode !== "ai" || snap.turn === mySideInAi) && !snap.aiThinking;
+      const hintKey = `${game.id}::${boardMatrixKey(snap.board)}::${snap.turn}::${game.aiLevel || "normal"}`;
+      if (canRefreshHintNow && uiState.hintCacheKey !== hintKey) {
+        const hint = getCurrentTurnHint(game.id, { maxPreviewPly: 5 });
+        uiState.hintCacheKey = hintKey;
+        uiState.hintCacheText = hint ? formatHintDetail(hint) : "当前无可用提示。";
+      } else if (!canRefreshHintNow && !uiState.hintCacheText) {
+        uiState.hintCacheText = "等待当前回合结束后刷新提示。";
+      }
+      const freezeHint = snap.mode === "ai" && snap.turn !== mySideInAi;
+      if (freezeHint && uiState.hintCacheText && !uiState.hintCacheText.includes("提示已锁定")) {
+        hintContentEl.textContent = `${uiState.hintCacheText}\n提示已锁定：等待电脑走棋后刷新。`;
+      } else {
+        hintContentEl.textContent = uiState.hintCacheText || "暂无提示";
+      }
     }
     renderTrendBar(snap);
     renderRecentQueue(game, snap);
@@ -1265,15 +1303,19 @@ function renderBoard() {
     undoGameBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
     if (resignGameBtn) resignGameBtn.disabled = snap.status === "finished";
     boardStatus.dataset.fullText = statusSummary;
+    enforceIosScrollLock();
   } catch (err) {
     renderCache.gameBoardKey = "";
     boardStatus.textContent = err.message;
     if (gameCoreMetaEl) gameCoreMetaEl.textContent = err.message;
     if (recentOpponentMoveEl) recentOpponentMoveEl.textContent = "--";
     if (recentSelfMoveEl) recentSelfMoveEl.textContent = "--";
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
     if (hintContentEl) hintContentEl.textContent = "暂无提示";
     undoGameBtn.disabled = true;
     if (resignGameBtn) resignGameBtn.disabled = true;
+    enforceIosScrollLock();
     renderMoveList();
     renderReviewResult();
   }
@@ -1354,11 +1396,13 @@ function renderBattleBoard() {
     battleNextPlyBtn.disabled = snap.index === snap.max;
     battleLastPlyBtn.disabled = snap.index === snap.max;
     undoBattleBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
+    enforceIosScrollLock();
   } catch (err) {
     renderCache.battleBoardKey = "";
     battleStatus.textContent = err.message;
     battleBoardEl.innerHTML = "";
     undoBattleBtn.disabled = true;
+    enforceIosScrollLock();
   }
   renderBattleMoveList();
   renderHomeOverview();
@@ -1396,7 +1440,7 @@ function onBoardCellClick(row, col, code, snap) {
     return;
   }
   try {
-    const keepScrollY = window.scrollY;
+    lockIosScrollPosition(850);
     makeMove(gameState.gameId, fromRow, fromCol, row, col);
     gameState.selected = null;
     gameState.followLatest = true;
@@ -1404,12 +1448,7 @@ function onBoardCellClick(row, col, code, snap) {
     gameState.ply = last.index;
     renderGameList();
     renderBoard();
-    if (IOS_SAFARI) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, keepScrollY);
-        setTimeout(() => window.scrollTo(0, keepScrollY), 0);
-      });
-    }
+    enforceIosScrollLock();
   } catch (err) {
     boardStatus.textContent = err.message;
     gameState.selected = null;
@@ -1461,19 +1500,14 @@ function onBattleCellClick(row, col, code, snap, role) {
     return;
   }
   try {
-    const keepScrollY = window.scrollY;
+    lockIosScrollPosition(850);
     makeBattleMove(battleState.battleId, fromRow, fromCol, row, col);
     battleState.selected = null;
     battleState.ply = Number.MAX_SAFE_INTEGER;
     battleState.followLatest = true;
     renderBattleList();
     renderBattleBoard();
-    if (IOS_SAFARI) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, keepScrollY);
-        setTimeout(() => window.scrollTo(0, keepScrollY), 0);
-      });
-    }
+    enforceIosScrollLock();
   } catch (err) {
     battleStatus.textContent = err.message;
     battleState.selected = null;
@@ -2036,6 +2070,8 @@ createGameBtn.addEventListener("click", () => {
     uiState.showSetupInGame = false;
     uiState.showHintCard = false;
     uiState.showMoveDrawer = false;
+    uiState.hintCacheKey = "";
+    uiState.hintCacheText = "暂无提示";
     renderAll();
   } catch (err) {
     alert(err.message);
@@ -2095,6 +2131,8 @@ gameSelect.addEventListener("change", () => {
   gameState.ply = Number.MAX_SAFE_INTEGER;
   gameState.followLatest = true;
   gameState.selected = null;
+  uiState.hintCacheKey = "";
+  uiState.hintCacheText = "暂无提示";
   renderBoard();
   restartAiAutoSyncLoop();
 });

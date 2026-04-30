@@ -880,10 +880,11 @@ function estimateImmediateNetLoss(boardAfter, row, col, side, gainedMaterial = 0
   return worstLoss;
 }
 
-function pickBestForecastMove(board, side) {
-  const external = xqwlightFindBestMove(board, side, "beginner", true);
+function pickBestForecastMove(board, side, levelId = "normal") {
+  const external = xqwlightFindBestMove(board, side, levelId, true);
   if (external && isLegalMove(board, external, side)) return external;
-  const ranked = rankMoves(board, side, 2);
+  const levelCfg = getAiLevelConfig(levelId);
+  const ranked = rankMoves(board, side, Math.max(2, levelCfg.evalDepth || 2));
   return ranked[0]?.move || null;
 }
 
@@ -905,7 +906,7 @@ function forecastThreePly(boardBefore, rawMove, side) {
     rawMove.to[1],
   );
   const enemy = oppositeSide(side);
-  const enemyMove1 = pickBestForecastMove(boardAfterMyMove, enemy);
+  const enemyMove1 = pickBestForecastMove(boardAfterMyMove, enemy, "normal");
   if (!enemyMove1) {
     return {
       line: [],
@@ -921,11 +922,11 @@ function forecastThreePly(boardBefore, rawMove, side) {
     enemyMove1.to[0],
     enemyMove1.to[1],
   );
-  const myMove2 = pickBestForecastMove(boardAfterEnemy1, side);
+  const myMove2 = pickBestForecastMove(boardAfterEnemy1, side, "normal");
   const boardAfterMy2 = myMove2
     ? applyMove(boardAfterEnemy1, myMove2.from[0], myMove2.from[1], myMove2.to[0], myMove2.to[1])
     : boardAfterEnemy1;
-  const enemyMove3 = pickBestForecastMove(boardAfterMy2, enemy);
+  const enemyMove3 = pickBestForecastMove(boardAfterMy2, enemy, "normal");
   const boardAfterEnemy3 = enemyMove3
     ? applyMove(
         boardAfterMy2,
@@ -964,6 +965,134 @@ function forecastThreePly(boardBefore, rawMove, side) {
     netSwing,
     movedPieceCaptured,
     capturePly,
+  };
+}
+
+function forecastFlexibleLine(boardBefore, firstMove, side, levelId = "normal", maxPreviewPly = 5) {
+  const limit = Math.max(2, Math.min(5, Number(maxPreviewPly) || 5));
+  const enemy = oppositeSide(side);
+  const line = [];
+  let board = applyMove(
+    boardBefore,
+    firstMove.from[0],
+    firstMove.from[1],
+    firstMove.to[0],
+    firstMove.to[1],
+  );
+  const beforeEval = evaluateBoardForSide(boardBefore, side);
+  let movedPieceCaptured = false;
+  let capturePly = 0;
+  line.push(moveNotationSafe(firstMove, boardBefore));
+
+  let turn = enemy;
+  let clarityTriggered = false;
+  for (let ply = 2; ply <= limit; ply += 1) {
+    const mv = pickBestForecastMove(board, turn, levelId);
+    if (!mv) break;
+    line.push(moveNotationSafe(mv, board));
+    const nextBoard = applyMove(board, mv.from[0], mv.from[1], mv.to[0], mv.to[1]);
+    if (
+      !movedPieceCaptured &&
+      mv.to[0] === firstMove.to[0] &&
+      mv.to[1] === firstMove.to[1] &&
+      mv.captured === firstMove.piece
+    ) {
+      movedPieceCaptured = true;
+      capturePly = ply;
+      clarityTriggered = true;
+    }
+    if (!clarityTriggered && (mv.captured || isInCheck(nextBoard, oppositeSide(turn)))) {
+      clarityTriggered = true;
+    }
+    board = nextBoard;
+    turn = oppositeSide(turn);
+    const swingNow = evaluateBoardForSide(board, side) - beforeEval;
+    if (ply >= 3 && clarityTriggered && Math.abs(swingNow) >= 1.2) break;
+    if (ply >= 4 && Math.abs(swingNow) >= 2.6) break;
+  }
+
+  const netSwing = Number((evaluateBoardForSide(board, side) - beforeEval).toFixed(2));
+  return {
+    line: line.filter(Boolean),
+    lineLength: line.length,
+    netSwing,
+    movedPieceCaptured,
+    capturePly,
+  };
+}
+
+function buildHintImpactDetails(boardBefore, firstMove, side, lineEval) {
+  const details = [];
+  const enemy = oppositeSide(side);
+  const boardAfter = applyMove(
+    boardBefore,
+    firstMove.from[0],
+    firstMove.from[1],
+    firstMove.to[0],
+    firstMove.to[1],
+  );
+  const gainValue = contextualPieceValue(
+    boardBefore,
+    firstMove.captured || "",
+    firstMove.to[0],
+    firstMove.to[1],
+  );
+  const immediateNetLoss = estimateImmediateNetLoss(
+    boardAfter,
+    firstMove.to[0],
+    firstMove.to[1],
+    side,
+    gainValue,
+  );
+  if (isInCheck(boardAfter, enemy)) details.push("可直接将军");
+  if (gainValue > 0) {
+    details.push(`可得子（约 ${gainValue.toFixed(1)} 子力）`);
+  }
+  if (immediateNetLoss >= 1) {
+    details.push(`落点可能被吃（净亏约 ${immediateNetLoss.toFixed(1)}）`);
+  } else if (immediateNetLoss > 0.25) {
+    details.push(`落点有兑子风险（净亏约 ${immediateNetLoss.toFixed(1)}）`);
+  } else {
+    details.push("落点相对安全");
+  }
+  if (canGiveCheckInOne(boardAfter, enemy, side)) {
+    details.push("对手下一步有将军手段，需优先防将");
+  }
+  if (lineEval?.movedPieceCaptured) {
+    details.push(`预演显示该子在第 ${lineEval.capturePly} 手可能被吃`);
+  }
+  if (lineEval) {
+    if (lineEval.netSwing >= 1.2) details.push("后续局面更主动");
+    else if (lineEval.netSwing <= -1.2) details.push("后续局面偏被动");
+    else details.push("后续局面大体均衡");
+  }
+  return details;
+}
+
+function buildCurrentTurnHint(board, side, levelId = "normal", maxPreviewPly = 5) {
+  const externalBest = xqwlightFindBestMove(board, side, levelId, true);
+  const levelCfg = getAiLevelConfig(levelId);
+  const ranked = rankMoves(board, side, Math.max(levelCfg.evalDepth || 2, 2));
+  let bestMove = externalBest && isLegalMove(board, externalBest, side) ? externalBest : null;
+  if (!bestMove) bestMove = ranked[0]?.move || null;
+  if (!bestMove) return null;
+  const notation = toChineseNotation(bestMove, board);
+  const lineEval = forecastFlexibleLine(board, bestMove, side, levelId, maxPreviewPly);
+  const impactDetails = buildHintImpactDetails(board, bestMove, side, lineEval);
+  return {
+    side,
+    bestMove: {
+      from: [...bestMove.from],
+      to: [...bestMove.to],
+      piece: bestMove.piece,
+      captured: bestMove.captured || "",
+    },
+    bestMoveNotation: notation,
+    previewLine: lineEval.line,
+    previewPly: lineEval.lineLength,
+    impactDetails,
+    lineEval,
+    engine: bestMove === externalBest ? "xqwlight+fallback" : "fallback",
   };
 }
 
@@ -1530,6 +1659,14 @@ export function getSnapshot(gameId, plyIndex) {
     latestMoveNotation: move?.notation || null,
     latestAssessment: move?.assessment || null,
   };
+}
+
+export function getCurrentTurnHint(gameId, { maxPreviewPly = 5 } = {}) {
+  const game = getGame(gameId);
+  const board = cloneBoard(game.snapshots[game.snapshots.length - 1]);
+  const side = game.turn;
+  const levelId = game.aiLevel || "normal";
+  return buildCurrentTurnHint(board, side, levelId, maxPreviewPly);
 }
 
 export function makeMove(gameId, fromRow, fromCol, toRow, toCol) {
