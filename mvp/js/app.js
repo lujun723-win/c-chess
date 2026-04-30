@@ -34,6 +34,7 @@ import {
   getBattleRole,
   getAiLevels,
   searchJoinableBattles,
+  evaluateTrendForRed,
 } from "./game.js";
 import { loadDb } from "./store.js";
 
@@ -61,6 +62,8 @@ const boardStatus = document.getElementById("board-status");
 const boardEl = document.getElementById("xiangqi-board");
 const moveListEl = document.getElementById("move-list");
 const gameCoreMetaEl = document.getElementById("game-core-meta");
+const recentOpponentMoveEl = document.getElementById("recent-opponent-move");
+const recentSelfMoveEl = document.getElementById("recent-self-move");
 const trendMarkerEl = document.getElementById("game-trend-marker");
 const trendValueEl = document.getElementById("game-trend-value");
 const trendBadgeEl = document.getElementById("game-trend-badge");
@@ -148,6 +151,8 @@ const uiState = {
   showHintCard: false,
   showSetupInGame: false,
   trendBias: 0,
+  trendEvalKey: "",
+  trendEvalScore: 0,
 };
 
 const BATTLE_SYNC_INTERVAL_ACTIVE_MS = 12000;
@@ -185,23 +190,6 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function trendMaterialBias(board) {
-  if (!Array.isArray(board)) return 0;
-  const values = { R: 9, N: 4, C: 4, B: 2, A: 2, P: 1 };
-  let red = 0;
-  let black = 0;
-  for (let row = 0; row < 10; row += 1) {
-    for (let col = 0; col < 9; col += 1) {
-      const p = board[row]?.[col];
-      if (!p) continue;
-      const v = values[p[1]] || 0;
-      if (p[0] === "r") red += v;
-      else if (p[0] === "b") black += v;
-    }
-  }
-  return red - black;
-}
-
 function setTrendBadge(text, tone = "warn", ms = 1900) {
   if (!trendBadgeEl || !text) return;
   trendBadgeEl.textContent = text;
@@ -215,20 +203,22 @@ function setTrendBadge(text, tone = "warn", ms = 1900) {
 
 function renderTrendBar(snap) {
   if (!trendMarkerEl || !trendValueEl || !snap) return;
-  const base = trendMaterialBias(snap.board);
-  let swing = 0;
-  const assessment = snap.latestAssessment;
-  if (assessment && snap.latestMove && Number.isFinite(Number(assessment.scoreGap))) {
+  const key = boardMatrixKey(snap.board);
+  if (uiState.trendEvalKey !== key) {
+    uiState.trendEvalKey = key;
+    uiState.trendEvalScore = evaluateTrendForRed(snap.board);
+  }
+  const redAdvantage = uiState.trendEvalScore;
+  if (snap.latestAssessment && snap.latestMove) {
     const mover = snap.latestMove.side;
-    const gap = Number(assessment.scoreGap || 0);
-    swing = (mover === "r" ? -1 : 1) * gap;
-    if (assessment.quality === "mistake" && gap >= 2.2) {
+    const gap = Number(snap.latestAssessment.scoreGap || 0);
+    if (snap.latestAssessment.quality === "mistake" && gap >= 2.2) {
       setTrendBadge(`${mover === "r" ? "红方" : "黑方"}失误`, "warn");
-    } else if (assessment.quality === "best" && gap <= 0.12) {
+    } else if (snap.latestAssessment.quality === "best" && gap <= 0.15) {
       setTrendBadge(`${mover === "r" ? "红方" : "黑方"}妙手`, "praise");
     }
   }
-  const target = clamp((base + swing) / 14, -1, 1);
+  const target = clamp(-Math.tanh(redAdvantage / 5.8), -1, 1);
   uiState.trendBias = uiState.trendBias * 0.62 + target * 0.38;
   trendMarkerEl.style.left = `${((uiState.trendBias + 1) / 2) * 100}%`;
   const absBias = Math.abs(uiState.trendBias);
@@ -238,6 +228,51 @@ function renderTrendBar(snap) {
     const side = uiState.trendBias < 0 ? "红优" : "黑优";
     trendValueEl.textContent = `${side} ${Math.round(absBias * 100)}%`;
   }
+}
+
+function formatMoveWithSide(move, boardBefore) {
+  if (!move) return "--";
+  const side = move.side === "r" ? "红" : "黑";
+  return `${side} ${toChineseNotation(move, boardBefore)}`;
+}
+
+function renderRecentQueue(game, snap) {
+  if (!recentOpponentMoveEl || !recentSelfMoveEl) return;
+  if (!game || !snap || !Array.isArray(game.moves) || game.moves.length === 0) {
+    recentOpponentMoveEl.textContent = "--";
+    recentSelfMoveEl.textContent = "--";
+    return;
+  }
+  const maxIndex = Math.max(0, Math.min(snap.index, game.moves.length));
+  const slice = game.moves.slice(0, maxIndex);
+  if (!slice.length) {
+    recentOpponentMoveEl.textContent = "--";
+    recentSelfMoveEl.textContent = "--";
+    return;
+  }
+  if (snap.mode === "ai") {
+    const mySide = snap.aiSide === "r" ? "b" : "r";
+    let opponentText = "--";
+    let selfText = "--";
+    for (let i = slice.length - 1; i >= 0; i -= 1) {
+      const mv = slice[i];
+      const text = formatMoveWithSide(mv, game.snapshots?.[i] || null);
+      if (mv.side !== mySide && opponentText === "--") {
+        opponentText = text;
+      } else if (mv.side === mySide && selfText === "--") {
+        selfText = text;
+      }
+      if (opponentText !== "--" && selfText !== "--") break;
+    }
+    recentOpponentMoveEl.textContent = opponentText;
+    recentSelfMoveEl.textContent = selfText;
+    return;
+  }
+  const lastIdx = slice.length - 1;
+  const prevIdx = slice.length - 2;
+  recentOpponentMoveEl.textContent = formatMoveWithSide(slice[lastIdx], game.snapshots?.[lastIdx] || null);
+  recentSelfMoveEl.textContent =
+    prevIdx >= 0 ? formatMoveWithSide(slice[prevIdx], game.snapshots?.[prevIdx] || null) : "--";
 }
 
 function formatHintDetail(assessment, latestMoveNotation = "") {
@@ -794,6 +829,10 @@ function renderGameWorkspace() {
       gameActiveSubtitle.textContent = "开始一盘新棋，或从历史对局进入回放。";
     }
     if (gameCoreMetaEl) gameCoreMetaEl.textContent = "未进入对局";
+    uiState.trendEvalKey = "";
+    uiState.trendEvalScore = 0;
+    if (recentOpponentMoveEl) recentOpponentMoveEl.textContent = "--";
+    if (recentSelfMoveEl) recentSelfMoveEl.textContent = "--";
     updateGamePanelVisibility(false);
     updateBoardViewLock(activeViewId);
     return;
@@ -1143,6 +1182,7 @@ function renderBoard() {
         : "暂无提示";
     }
     renderTrendBar(snap);
+    renderRecentQueue(game, snap);
     const statusSummary = `${modeLine}\n第 ${snap.index} 手 / 共 ${snap.max} 手，${
       snap.turn === "r" ? "红方" : "黑方"
     }走子。${snap.index < snap.max ? "（回放模式）" : "（录入模式）"}${endLine}\n${undoLine}${checkLine}`;
@@ -1195,6 +1235,8 @@ function renderBoard() {
     renderCache.gameBoardKey = "";
     boardStatus.textContent = err.message;
     if (gameCoreMetaEl) gameCoreMetaEl.textContent = err.message;
+    if (recentOpponentMoveEl) recentOpponentMoveEl.textContent = "--";
+    if (recentSelfMoveEl) recentSelfMoveEl.textContent = "--";
     if (hintContentEl) hintContentEl.textContent = "暂无提示";
     undoGameBtn.disabled = true;
     renderMoveList();

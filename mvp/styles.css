@@ -561,6 +561,36 @@ hr {
   line-height: 1.35;
 }
 
+.recent-queue {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recent-item {
+  border: 1px solid rgba(214, 201, 185, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 6px 8px;
+  display: grid;
+  gap: 3px;
+}
+
+.recent-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.recent-move {
+  font-size: 14px;
+  font-weight: 700;
+  color: #3f3024;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .game-hud-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1311,6 +1341,10 @@ hr {
   .game-hud-actions {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .recent-queue {
+    grid-template-columns: 1fr;
   }
 
   .move-drawer {

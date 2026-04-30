@@ -657,6 +657,27 @@ function evaluateBoardForSide(board, side) {
   return score;
 }
 
+function clampValue(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function evaluateTrendForRed(board) {
+  if (!Array.isArray(board) || board.length !== 10) return 0;
+  const base = evaluateBoardForSide(board, "r");
+  const redMobility = generateLegalMoves(board, "r").length;
+  const blackMobility = generateLegalMoves(board, "b").length;
+  const mobility = clampValue((redMobility - blackMobility) / 26, -1.2, 1.2);
+  let kingPressure = 0;
+  if (isInCheck(board, "r")) kingPressure -= 1.4;
+  if (isInCheck(board, "b")) kingPressure += 1.4;
+  if (canGiveCheckInOne(board, "r", "b")) kingPressure += 0.55;
+  if (canGiveCheckInOne(board, "b", "r")) kingPressure -= 0.55;
+  const totalPieces = countBoardPieces(board);
+  const phaseScale = totalPieces > 24 ? 0.92 : totalPieces > 14 ? 1.0 : 1.08;
+  const score = base * phaseScale + mobility + kingPressure;
+  return Number(score.toFixed(2));
+}
+
 function moveOrderHeuristic(move) {
   const capturedV = pieceValue(move.captured || "");
   const pieceV = pieceValue(move.piece || "");
