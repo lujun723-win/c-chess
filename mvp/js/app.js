@@ -142,6 +142,8 @@ const battleState = {
 
 const reviewState = {
   gameId: null,
+  ply: Number.MAX_SAFE_INTEGER,
+  focusPly: null,
 };
 
 const renderCache = {
@@ -846,6 +848,8 @@ function renderReviewGameOptions() {
   if (!user) {
     reviewGameSelect.innerHTML = `<option value="">请先登录</option>`;
     reviewState.gameId = null;
+    reviewState.ply = Number.MAX_SAFE_INTEGER;
+    reviewState.focusPly = null;
     return;
   }
   let finishedGames = [];
@@ -854,11 +858,15 @@ function renderReviewGameOptions() {
   } catch (err) {
     reviewGameSelect.innerHTML = `<option value="">加载失败：${err.message}</option>`;
     reviewState.gameId = null;
+    reviewState.ply = Number.MAX_SAFE_INTEGER;
+    reviewState.focusPly = null;
     return;
   }
   if (!finishedGames.length) {
     reviewGameSelect.innerHTML = `<option value="">暂无已结束棋局</option>`;
     reviewState.gameId = null;
+    reviewState.ply = Number.MAX_SAFE_INTEGER;
+    reviewState.focusPly = null;
     return;
   }
   reviewGameSelect.innerHTML = finishedGames
@@ -872,6 +880,8 @@ function renderReviewGameOptions() {
       ? reviewState.gameId
       : finishedGames[0].id;
   reviewState.gameId = preferredId;
+  reviewState.ply = Number.MAX_SAFE_INTEGER;
+  reviewState.focusPly = null;
   reviewGameSelect.value = preferredId;
 }
 
@@ -1183,7 +1193,8 @@ function buildReviewHtml(report, game) {
       const qualityText = assessment?.brilliant ? `${it.qualityLabel}·妙手` : it.qualityLabel;
       const riskText = it.risks?.length ? it.risks.join("、") : "无";
       const bestText = assessment?.bestMoveNotation || "—";
-      return `<tr>
+      const rowClass = reviewState.focusPly === it.ply ? ` class="is-focus"` : "";
+      return `<tr${rowClass}>
         <td>${it.ply}</td>
         <td>${it.side === "r" ? "红" : "黑"}</td>
         <td>${escapeHtml(it.notation)}</td>
@@ -1211,8 +1222,10 @@ function buildReviewHtml(report, game) {
           const lineText = assessment?.threePly?.line?.length
             ? assessment.threePly.line.join(" -> ")
             : "暂无稳定预演线";
-          return `<article class="review-key-node">
+          const activeClass = reviewState.focusPly === km.ply ? " is-focus" : "";
+          return `<article class="review-key-node${activeClass}">
             <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
+            <button type="button" class="review-jump-btn compact-btn" data-review-ply="${km.ply}">跳到该手局面</button>
             <p><strong>局势影响：</strong>${escapeHtml(describeImpactFromAssessment(assessment))}</p>
             <p><strong>关键窗口：</strong>${escapeHtml(around.join(" ｜ "))}</p>
             <p><strong>推演：</strong>${escapeHtml(lineText)}</p>
@@ -1744,7 +1757,9 @@ function renderReviewResult() {
   try {
     const report = analyzeGame(reviewState.gameId);
     const game = getGame(reviewState.gameId);
-    const snap = getSnapshot(reviewState.gameId, Number.MAX_SAFE_INTEGER);
+    const targetPly = Number.isFinite(reviewState.ply) ? reviewState.ply : Number.MAX_SAFE_INTEGER;
+    const snap = getSnapshot(reviewState.gameId, targetPly);
+    reviewState.ply = snap.index;
     const boardKey = reviewBoardRenderKey(snap);
     if (reviewBoardEl && renderCache.reviewBoardKey !== boardKey) {
       renderCache.reviewBoardKey = boardKey;
@@ -1766,7 +1781,8 @@ function renderReviewResult() {
     }
     if (reviewBoardStatus) {
       const turnText = snap.turn === "r" ? "红方" : "黑方";
-      reviewBoardStatus.textContent = `复盘棋盘：终局快照\n总手数：${snap.max} 手\n终局轮到：${turnText}\n提示：右侧支持总览、逐手、关键节点折叠查看。`;
+      const atText = snap.index === snap.max ? "终局快照" : `第 ${snap.index} 手局面`;
+      reviewBoardStatus.textContent = `复盘棋盘：${atText}\n总手数：${snap.max} 手\n当前轮到：${turnText}\n提示：点击关键节点可跳转对应手数。`;
     }
     reviewResultEl.innerHTML = buildReviewHtml(report, game);
   } catch (err) {
@@ -2263,6 +2279,8 @@ lastPlyBtn.addEventListener("click", () => {
 });
 
 analyzeGameBtn.addEventListener("click", () => {
+  reviewState.ply = Number.MAX_SAFE_INTEGER;
+  reviewState.focusPly = null;
   renderReviewResult();
 });
 
@@ -2360,6 +2378,19 @@ battleSelect.addEventListener("change", () => {
 
 reviewGameSelect?.addEventListener("change", () => {
   reviewState.gameId = reviewGameSelect.value || null;
+  reviewState.ply = Number.MAX_SAFE_INTEGER;
+  reviewState.focusPly = null;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
+});
+
+reviewResultEl?.addEventListener("click", (event) => {
+  const btn = event.target?.closest?.("[data-review-ply]");
+  if (!btn) return;
+  const ply = Number(btn.dataset.reviewPly || "");
+  if (!Number.isInteger(ply) || ply <= 0) return;
+  reviewState.ply = ply;
+  reviewState.focusPly = ply;
   renderCache.reviewBoardKey = "";
   renderReviewResult();
 });

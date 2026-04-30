@@ -979,6 +979,10 @@ hr {
   vertical-align: top;
 }
 
+.review-step-table tr.is-focus td {
+  background: rgba(255, 243, 219, 0.9);
+}
+
 .review-step-table thead th {
   position: sticky;
   top: 0;
@@ -1003,6 +1007,15 @@ hr {
   padding: 8px 10px;
   display: grid;
   gap: 5px;
+}
+
+.review-key-node.is-focus {
+  border-color: rgba(171, 128, 77, 0.95);
+  box-shadow: 0 0 0 1px rgba(171, 128, 77, 0.22) inset;
+}
+
+.review-jump-btn {
+  justify-self: start;
 }
 
 .review-key-node h5,
