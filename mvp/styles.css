@@ -1194,21 +1194,6 @@ hr {
   box-shadow: 0 0 0 1px rgba(171, 128, 77, 0.22) inset;
 }
 
-.review-jump-btn {
-  justify-self: start;
-}
-
-.review-step-banner {
-  margin-top: 8px;
-  min-height: auto;
-  border: 1px solid rgba(214, 201, 185, 0.95);
-  border-radius: 12px;
-  background: rgba(252, 247, 239, 0.95);
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .review-replay-row button {
   min-height: 34px;
   padding: 6px 8px;

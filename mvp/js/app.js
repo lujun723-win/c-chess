@@ -93,7 +93,6 @@ const reviewSideBlackBtn = document.getElementById("review-side-black-btn");
 const reviewBoardEl = document.getElementById("review-board-points");
 const reviewBoardStatus = document.getElementById("review-board-status");
 const reviewTimelineEl = document.getElementById("review-timeline");
-const reviewStepBannerEl = document.getElementById("review-step-banner");
 const reviewFirstPlyBtn = document.getElementById("review-first-ply-btn");
 const reviewPrevPlyBtn = document.getElementById("review-prev-ply-btn");
 const reviewNextPlyBtn = document.getElementById("review-next-ply-btn");
@@ -218,10 +217,13 @@ const IOS_SAFARI =
   /Safari/.test(navigator.userAgent) &&
   !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
 const MOVE_FX_DURATION_MS = IOS_SAFARI ? 240 : 360;
+const REVIEW_MOVE_FX_DURATION_MS = Math.round(MOVE_FX_DURATION_MS * 1.5);
+const REVIEW_MOVE_REPLAY_COUNT = 3;
 const CHECK_CALLOUT_DURATION_MS = 2000;
 let sfxAudioCtx = null;
 let sfxUnlocked = false;
 let sfxMasterGain = null;
+let reviewReplayToken = 0;
 const moveFxState = {
   game: { id: null, index: 0, checkToken: "" },
   battle: { id: null, index: 0, checkToken: "" },
@@ -733,7 +735,7 @@ function spawnCaptureParticles(boardPointsEl, row, col, count = 14) {
   }
 }
 
-function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
+function spawnMoveFx(boardPointsEl, move, { checkAlert = false, durationMs = MOVE_FX_DURATION_MS } = {}) {
   if (!boardPointsEl || !move) return;
   const [fromRow, fromCol] = move.from;
   const [toRow, toCol] = move.to;
@@ -745,13 +747,14 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
     fromCol,
     pieceLabel(move.piece || ""),
   );
+  ghost.style.transitionDuration = `${durationMs}ms`;
   boardPointsEl.appendChild(ghost);
   requestAnimationFrame(() => {
     ghost.classList.add("moving");
     ghost.style.left = pointLeftPercent(toCol);
     ghost.style.top = pointTopPercent(toRow);
   });
-  const impactDelayMs = Math.max(130, MOVE_FX_DURATION_MS - 120);
+  const impactDelayMs = Math.max(130, durationMs - 120);
   if (move.captured) {
     playCaptureSfx(impactDelayMs);
   } else {
@@ -760,7 +763,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
   setTimeout(() => {
     ghost.remove();
     toCell?.classList.remove("anim-hidden");
-  }, MOVE_FX_DURATION_MS + 140);
+  }, durationMs + 140);
 
   if (move.captured) {
     setTimeout(() => {
@@ -783,7 +786,7 @@ function spawnMoveFx(boardPointsEl, move, { checkAlert = false } = {}) {
       setTimeout(() => flash.remove(), 420);
       showCheckCallout(boardPointsEl);
       playCheckSfx();
-    }, Math.max(150, MOVE_FX_DURATION_MS - 120));
+    }, Math.max(150, durationMs - 120));
   }
 }
 
@@ -819,6 +822,36 @@ function maybeAnimateLatestMove(scope, ownerId, snap, boardPointsEl) {
     state.checkToken = checkToken;
   }
   state.index = snap.index;
+}
+
+function getReviewOwner() {
+  if (!reviewState.gameId) return null;
+  return reviewState.source === "battle" ? getBattle(reviewState.gameId) : getGame(reviewState.gameId);
+}
+
+function replayReviewMove(ply) {
+  if (!reviewBoardEl || !Number.isInteger(ply) || ply <= 0) return;
+  const owner = getReviewOwner();
+  const move = owner?.moves?.[ply - 1] || null;
+  if (!move) return;
+  const token = (reviewReplayToken += 1);
+  const intervalMs = REVIEW_MOVE_FX_DURATION_MS + 320;
+  for (let i = 0; i < REVIEW_MOVE_REPLAY_COUNT; i += 1) {
+    setTimeout(() => {
+      if (token !== reviewReplayToken) return;
+      spawnMoveFx(reviewBoardEl, move, { durationMs: REVIEW_MOVE_FX_DURATION_MS });
+    }, i * intervalMs);
+  }
+}
+
+function jumpReviewToPly(ply, { replay = false } = {}) {
+  if (!Number.isInteger(ply) || ply <= 0) return;
+  reviewState.ply = ply;
+  reviewState.focusPly = ply;
+  uiState.reviewTimelineActivePly = ply;
+  renderCache.reviewBoardKey = "";
+  renderReviewResult();
+  if (replay) replayReviewMove(ply);
 }
 
 function getOwnedFamily() {
@@ -1577,7 +1610,7 @@ function buildReviewHtml(report, game) {
     ? topNodes
         .map(({ item, assessment }) => {
           const quality = assessment?.brilliant ? `${item.qualityLabel}·妙手` : item.qualityLabel;
-          return `<li><button type="button" class="review-jump-btn compact-btn" data-review-ply="${item.ply}">第 ${item.ply} 手</button> ${
+          return `<li><strong>第 ${item.ply} 手</strong> ${
             item.side === "r" ? "红" : "黑"
           }${escapeHtml(item.notation)} · ${escapeHtml(quality || "未评估")} · ${escapeHtml(
             reviewWhyText(item, assessment),
@@ -1605,7 +1638,6 @@ function buildReviewHtml(report, game) {
         const activeClass = reviewState.focusPly === km.ply ? " is-focus" : "";
         return `<article class="review-key-node${activeClass}">
           <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
-          <button type="button" class="review-jump-btn compact-btn" data-review-ply="${km.ply}">跳到该手局面</button>
           <p><strong>这步为什么不好：</strong>${escapeHtml(reviewWhyText(item, assessment))}</p>
           <p><strong>当时更好的选择：</strong>${escapeHtml(reviewBetterMoveText(item, assessment))}</p>
           <p><strong>下次先检查什么：</strong>${escapeHtml(reviewChecklistText(item, assessment))}</p>
@@ -2196,7 +2228,6 @@ function renderReviewResult() {
   if (!user || !reviewState.gameId) {
     reviewResultEl.innerHTML = `<p class="review-empty">复盘结果：请先登录，并选择一盘已结束棋局。</p>`;
     if (reviewTimelineEl) reviewTimelineEl.innerHTML = `<p class="review-empty">时间轴：等待分析结果。</p>`;
-    if (reviewStepBannerEl) reviewStepBannerEl.textContent = "当前：终局局面";
     if (reviewBoardEl) reviewBoardEl.innerHTML = "";
     if (reviewBoardStatus) reviewBoardStatus.textContent = "复盘棋盘：选择一盘已结束对局后显示。";
     if (reviewFirstPlyBtn) reviewFirstPlyBtn.disabled = true;
@@ -2239,19 +2270,9 @@ function renderReviewResult() {
     if (reviewBoardStatus) {
       const turnText = snap.turn === "r" ? "红方" : "黑方";
       const atText = snap.index === snap.max ? "终局快照" : `第 ${snap.index} 手局面`;
-      reviewBoardStatus.textContent = `复盘棋盘：${atText}\n总手数：${snap.max} 手\n当前轮到：${turnText}\n提示：点击关键节点可跳转对应手数。`;
+      reviewBoardStatus.textContent = `复盘棋盘：${atText}\n总手数：${snap.max} 手\n当前轮到：${turnText}\n提示：点击时间线标记可跳转并回放该手。`;
     }
     if (reviewTimelineEl) reviewTimelineEl.innerHTML = buildReviewTimelineHtml(report, game);
-    if (reviewStepBannerEl) {
-      const currentMove = snap.index > 0 ? game.moves[snap.index - 1] : null;
-      const currentAssessment = currentMove?.assessment || null;
-      const moveText = currentMove ? toChineseNotation(currentMove, game.snapshots[snap.index - 1] || null) : "开局";
-      const qualityText = currentAssessment
-        ? `${currentAssessment.qualityLabel}${currentAssessment.brilliant ? "·妙手" : ""}`
-        : "未评估";
-      const impactText = currentAssessment ? describeImpactFromAssessment(currentAssessment) : "局面初始化";
-      reviewStepBannerEl.textContent = `第 ${snap.index}/${snap.max} 手 · ${snap.index > 0 ? moveText : "开局局面"} · 质量：${qualityText} · 影响：${impactText}`;
-    }
     if (reviewFirstPlyBtn) reviewFirstPlyBtn.disabled = snap.index === 0;
     if (reviewPrevPlyBtn) reviewPrevPlyBtn.disabled = snap.index === 0;
     if (reviewNextPlyBtn) reviewNextPlyBtn.disabled = snap.index === snap.max;
@@ -2999,19 +3020,9 @@ reviewResultEl?.addEventListener("click", (event) => {
   if (markerBtn) {
     const ply = Number(markerBtn.dataset.reviewMarker || "");
     if (!Number.isInteger(ply) || ply <= 0) return;
-    uiState.reviewTimelineActivePly = ply;
-    renderReviewResult();
+    jumpReviewToPly(ply, { replay: true });
     return;
   }
-  const btn = event.target?.closest?.("[data-review-ply]");
-  if (!btn) return;
-  const ply = Number(btn.dataset.reviewPly || "");
-  if (!Number.isInteger(ply) || ply <= 0) return;
-  reviewState.ply = ply;
-  reviewState.focusPly = ply;
-  uiState.reviewTimelineActivePly = ply;
-  renderCache.reviewBoardKey = "";
-  renderReviewResult();
 });
 
 reviewTimelineEl?.addEventListener("click", (event) => {
@@ -3019,19 +3030,9 @@ reviewTimelineEl?.addEventListener("click", (event) => {
   if (markerBtn) {
     const ply = Number(markerBtn.dataset.reviewMarker || "");
     if (!Number.isInteger(ply) || ply <= 0) return;
-    uiState.reviewTimelineActivePly = ply;
-    renderReviewResult();
+    jumpReviewToPly(ply, { replay: true });
     return;
   }
-  const jumpBtn = event.target?.closest?.("[data-review-ply]");
-  if (!jumpBtn) return;
-  const ply = Number(jumpBtn.dataset.reviewPly || "");
-  if (!Number.isInteger(ply) || ply <= 0) return;
-  reviewState.ply = ply;
-  reviewState.focusPly = ply;
-  uiState.reviewTimelineActivePly = ply;
-  renderCache.reviewBoardKey = "";
-  renderReviewResult();
 });
 
 battleFirstPlyBtn.addEventListener("click", () => {
