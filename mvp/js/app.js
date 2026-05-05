@@ -1378,6 +1378,7 @@ function describeImpactFromAssessment(assessment) {
 function reviewWhyText(item, assessment) {
   if (!assessment) return "这步缺少完整评估，先重摆局面，检查是否有将军、吃子和被吃风险。";
   const risks = Array.isArray(assessment.risks) ? assessment.risks : [];
+  if (isSameAsBestMove(item, assessment) && !assessment.brilliant) return "这步就是参考最优，不需要作为问题节点复盘。";
   if (assessment.brilliant) return "这步质量高，关键价值是主动制造威胁，同时没有明显落点风险。";
   if (risks.includes("下一步可能被将")) return "主要问题是走完后王城不安全，对手下一步可能直接将军。";
   if (
@@ -1406,6 +1407,12 @@ function reviewBetterMoveText(item, assessment) {
   return `当时更值得优先看的走法是「${best}」。先比较它和实走「${item?.notation || "当前走法"}」后的安全性与先手。`;
 }
 
+function isSameAsBestMove(item, assessment) {
+  const best = String(assessment?.bestMoveNotation || "").trim();
+  const played = String(item?.notation || "").trim();
+  return Boolean(best && played && best === played);
+}
+
 function reviewChecklistText(item, assessment) {
   const risks = Array.isArray(assessment?.risks) ? assessment.risks : [];
   if (risks.includes("下一步可能被将")) return "下次先问：我走完以后，对方有没有将军？将军能不能顺手得子？";
@@ -1425,6 +1432,7 @@ function reviewChecklistText(item, assessment) {
 
 function hasSubstantiveReviewValue(item, assessment) {
   if (!assessment) return false;
+  if (isSameAsBestMove(item, assessment) && !assessment.brilliant) return false;
   const risks = Array.isArray(item?.risks) ? item.risks : [];
   if (assessment.quality === "mistake" || assessment.quality === "inaccuracy") return true;
   if (assessment.brilliant) return true;
