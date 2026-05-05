@@ -379,6 +379,11 @@
               <section id="review-setup-panel" class="surface-card review-setup-card">
                 <button id="review-toggle-setup-btn" class="review-setup-title" type="button">选局设置</button>
                 <div id="review-setup-content" class="stack review-setup-content">
+                  <label for="review-source-select">复盘来源</label>
+                  <select id="review-source-select">
+                    <option value="game">普通对局</option>
+                    <option value="battle">双人对战</option>
+                  </select>
                   <label for="review-game-select">仅显示已结束并已保存的对局</label>
                   <select id="review-game-select"></select>
                   <button id="analyze-game-btn" type="button">加载并生成复盘分析</button>
@@ -552,11 +557,22 @@
                     <button id="toggle-battle-setup-btn" class="compact-btn" type="button">设置</button>
                     <button id="toggle-battle-move-drawer-btn" class="compact-btn" type="button">棋谱</button>
                   </div>
+                  <div class="game-trend-wrap">
+                    <span class="trend-side red">红方</span>
+                    <div class="game-trend-track">
+                      <div class="game-trend-midline"></div>
+                      <div id="battle-trend-marker" class="game-trend-marker">
+                        <span id="battle-trend-value" class="game-trend-value">均势</span>
+                      </div>
+                    </div>
+                    <span class="trend-side black">黑方</span>
+                  </div>
                 </div>
                 <div class="play-surface game-play-surface">
                   <div class="board-column game-board-column">
                     <div class="board-action-strip">
                       <button id="undo-battle-btn" class="compact-btn" type="button">悔棋</button>
+                      <button id="resign-battle-btn" class="compact-btn danger-button" type="button">认输</button>
                       <button id="end-battle-btn" class="compact-btn danger-button" type="button">结束</button>
                       <button id="battle-first-ply-btn" class="compact-icon-btn" type="button">|&lt;</button>
                       <button id="battle-prev-ply-btn" class="compact-icon-btn" type="button">&lt;</button>

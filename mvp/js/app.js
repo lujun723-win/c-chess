@@ -23,12 +23,14 @@ import {
   getGame,
   toChineseNotation,
   analyzeGame,
+  analyzeBattle,
   createBattle,
   joinBattleById,
   getMyBattles,
   getBattleSnapshot,
   makeBattleMove,
   endBattle,
+  resignBattle,
   undoBattleMove,
   getBattle,
   getBattleRole,
@@ -77,7 +79,9 @@ const hintCardEl = document.getElementById("hint-card");
 const hintContentEl = document.getElementById("hint-content");
 const toggleSetupBtn = document.getElementById("toggle-setup-btn");
 const reviewResultEl = document.getElementById("review-result");
+const reviewSourceSelect = document.getElementById("review-source-select");
 const reviewGameSelect = document.getElementById("review-game-select");
+const reviewGameSelectLabel = document.querySelector('label[for="review-game-select"]');
 const reviewSetupPanel = document.getElementById("review-setup-panel");
 const reviewToggleSetupBtn = document.getElementById("review-toggle-setup-btn");
 const reviewSetupContent = document.getElementById("review-setup-content");
@@ -102,6 +106,7 @@ const lastPlyBtn = document.getElementById("last-ply-btn");
 const battleNameInput = document.getElementById("battle-name");
 const createBattleBtn = document.getElementById("create-battle-btn");
 const undoBattleBtn = document.getElementById("undo-battle-btn");
+const resignBattleBtn = document.getElementById("resign-battle-btn");
 const endBattleBtn = document.getElementById("end-battle-btn");
 const battleSetupPanel = document.getElementById("battle-setup-panel");
 const battleLivePanel = document.getElementById("battle-live-panel");
@@ -110,6 +115,8 @@ const battleActiveSubtitle = document.getElementById("battle-active-subtitle");
 const battleCoreMetaEl = document.getElementById("battle-core-meta");
 const battleRecentOpponentMoveEl = document.getElementById("battle-recent-opponent-move");
 const battleRecentSelfMoveEl = document.getElementById("battle-recent-self-move");
+const battleTrendMarkerEl = document.getElementById("battle-trend-marker");
+const battleTrendValueEl = document.getElementById("battle-trend-value");
 const toggleBattleSetupBtn = document.getElementById("toggle-battle-setup-btn");
 const battleMoveDrawerEl = document.getElementById("battle-move-drawer");
 const toggleBattleMoveDrawerBtn = document.getElementById("toggle-battle-move-drawer-btn");
@@ -162,6 +169,7 @@ const battleState = {
 };
 
 const reviewState = {
+  source: "game", // game | battle
   gameId: null,
   ply: Number.MAX_SAFE_INTEGER,
   focusPly: null,
@@ -181,6 +189,9 @@ const uiState = {
   trendBias: 0,
   trendEvalKey: "",
   trendEvalScore: 0,
+  battleTrendBias: 0,
+  battleTrendEvalKey: "",
+  battleTrendEvalScore: 0,
   hintCacheKey: "",
   hintCacheText: "暂无提示",
   reviewTimelineFilter: "all",
@@ -271,6 +282,26 @@ function renderTrendBar(snap) {
   } else {
     const side = uiState.trendBias < 0 ? "红优" : "黑优";
     trendValueEl.textContent = `${side} ${Math.round(absBias * 100)}%`;
+  }
+}
+
+function renderBattleTrendBar(snap) {
+  if (!battleTrendMarkerEl || !battleTrendValueEl || !snap) return;
+  const key = boardMatrixKey(snap.board);
+  if (uiState.battleTrendEvalKey !== key) {
+    uiState.battleTrendEvalKey = key;
+    uiState.battleTrendEvalScore = evaluateTrendForRed(snap.board);
+  }
+  const redAdvantage = uiState.battleTrendEvalScore;
+  const target = clamp(-Math.tanh(redAdvantage / 5.8), -1, 1);
+  uiState.battleTrendBias = uiState.battleTrendBias * 0.62 + target * 0.38;
+  battleTrendMarkerEl.style.left = `${((uiState.battleTrendBias + 1) / 2) * 100}%`;
+  const absBias = Math.abs(uiState.battleTrendBias);
+  if (absBias < 0.07) {
+    battleTrendValueEl.textContent = "均势";
+  } else {
+    const side = uiState.battleTrendBias < 0 ? "红优" : "黑优";
+    battleTrendValueEl.textContent = `${side} ${Math.round(absBias * 100)}%`;
   }
 }
 
@@ -919,6 +950,12 @@ function renderGameList() {
 
 function renderReviewGameOptions() {
   if (!reviewGameSelect) return;
+  const source = reviewState.source === "battle" ? "battle" : "game";
+  if (reviewSourceSelect) reviewSourceSelect.value = source;
+  if (reviewGameSelectLabel) {
+    reviewGameSelectLabel.textContent =
+      source === "battle" ? "仅显示已结束并已保存的双人对战" : "仅显示已结束并已保存的对局";
+  }
   const user = getCurrentUser();
   if (!user) {
     reviewGameSelect.innerHTML = `<option value="">请先登录</option>`;
@@ -929,7 +966,10 @@ function renderReviewGameOptions() {
   }
   let finishedGames = [];
   try {
-    finishedGames = getMyGames().filter((game) => game.status === "finished");
+    finishedGames =
+      source === "battle"
+        ? getMyBattles().filter((battle) => battle.status === "finished")
+        : getMyGames().filter((game) => game.status === "finished");
   } catch (err) {
     reviewGameSelect.innerHTML = `<option value="">加载失败：${err.message}</option>`;
     reviewState.gameId = null;
@@ -945,10 +985,10 @@ function renderReviewGameOptions() {
     return;
   }
   reviewGameSelect.innerHTML = finishedGames
-    .map(
-      (game) =>
-        `<option value="${game.id}">${game.name}（${gameModeText(game.mode)} / ${game.ply}步）</option>`,
-    )
+    .map((game) => {
+      const modeText = source === "battle" ? "双人对战" : gameModeText(game.mode);
+      return `<option value="${game.id}">${game.name}（${modeText} / ${game.ply}步）</option>`;
+    })
     .join("");
   const preferredId =
     reviewState.gameId && finishedGames.some((game) => game.id === reviewState.gameId)
@@ -1084,6 +1124,7 @@ function sideText(side) {
 }
 
 function gameModeText(mode) {
+  if (mode === "battle") return "双人对战";
   return mode === "ai" ? "人机对战" : "练习模式";
 }
 
@@ -1755,11 +1796,17 @@ function renderBattleBoard() {
   if (!user || !battleState.battleId) {
     battleBoardEl.innerHTML = "";
     renderCache.battleBoardKey = "";
+    uiState.battleTrendEvalKey = "";
+    uiState.battleTrendEvalScore = 0;
+    uiState.battleTrendBias = 0;
+    if (battleTrendMarkerEl) battleTrendMarkerEl.style.left = "50%";
+    if (battleTrendValueEl) battleTrendValueEl.textContent = "均势";
     battleStatus.textContent = "请登录并创建/加入对战。";
     if (battleCoreMetaEl) battleCoreMetaEl.textContent = "未进入对战";
     if (battleRecentOpponentMoveEl) battleRecentOpponentMoveEl.textContent = "--";
     if (battleRecentSelfMoveEl) battleRecentSelfMoveEl.textContent = "--";
     undoBattleBtn.disabled = true;
+    if (resignBattleBtn) resignBattleBtn.disabled = true;
     renderBattleMoveList();
     renderBattleWorkspace();
     return;
@@ -1798,6 +1845,7 @@ function renderBattleBoard() {
       }/${snap.undoLimit}，剩余 ${snap.undoRemaining}${snap.inCheck ? ` · ${sideText(snap.checkedSide)}被将` : ""}`;
     }
     renderBattleRecentQueue(battle, snap, role);
+    renderBattleTrendBar(snap);
 
     const boardKey = battleBoardRenderKey(snap);
     if (renderCache.battleBoardKey !== boardKey) {
@@ -1837,12 +1885,19 @@ function renderBattleBoard() {
     battleNextPlyBtn.disabled = snap.index === snap.max;
     battleLastPlyBtn.disabled = snap.index === snap.max;
     undoBattleBtn.disabled = snap.max === 0 || snap.undoRemaining <= 0 || snap.index < snap.max;
+    if (resignBattleBtn) resignBattleBtn.disabled = snap.status !== "active";
     enforceIosScrollLock();
   } catch (err) {
     renderCache.battleBoardKey = "";
+    uiState.battleTrendEvalKey = "";
+    uiState.battleTrendEvalScore = 0;
+    uiState.battleTrendBias = 0;
+    if (battleTrendMarkerEl) battleTrendMarkerEl.style.left = "50%";
+    if (battleTrendValueEl) battleTrendValueEl.textContent = "均势";
     battleStatus.textContent = err.message;
     battleBoardEl.innerHTML = "";
     undoBattleBtn.disabled = true;
+    if (resignBattleBtn) resignBattleBtn.disabled = true;
     if (battleCoreMetaEl) battleCoreMetaEl.textContent = err.message;
     if (battleRecentOpponentMoveEl) battleRecentOpponentMoveEl.textContent = "--";
     if (battleRecentSelfMoveEl) battleRecentSelfMoveEl.textContent = "--";
@@ -2061,10 +2116,15 @@ function renderReviewResult() {
     return;
   }
   try {
-    const report = analyzeGame(reviewState.gameId);
-    const game = getGame(reviewState.gameId);
+    const source = reviewState.source === "battle" ? "battle" : "game";
+    const report =
+      source === "battle" ? analyzeBattle(reviewState.gameId) : analyzeGame(reviewState.gameId);
+    const game = source === "battle" ? getBattle(reviewState.gameId) : getGame(reviewState.gameId);
     const targetPly = Number.isFinite(reviewState.ply) ? reviewState.ply : Number.MAX_SAFE_INTEGER;
-    const snap = getSnapshot(reviewState.gameId, targetPly);
+    const snap =
+      source === "battle"
+        ? getBattleSnapshot(reviewState.gameId, targetPly)
+        : getSnapshot(reviewState.gameId, targetPly);
     reviewState.ply = snap.index;
     const boardKey = reviewBoardRenderKey(snap);
     if (reviewBoardEl && renderCache.reviewBoardKey !== boardKey) {
@@ -2733,6 +2793,24 @@ undoBattleBtn.addEventListener("click", () => {
   }
 });
 
+resignBattleBtn?.addEventListener("click", () => {
+  try {
+    if (!battleState.battleId) throw new Error("请先选择一个对战");
+    const yes = confirm("确认认输？");
+    if (!yes) return;
+    const role = getBattleRole(battleState.battleId);
+    resignBattle(battleState.battleId, { side: role });
+    battleState.ply = Number.MAX_SAFE_INTEGER;
+    battleState.selected = null;
+    battleState.followLatest = true;
+    renderBattleList();
+    renderBattleBoard();
+    alert(`${sideText(role)}认输。`);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 endBattleBtn.addEventListener("click", () => {
   try {
     if (!battleState.battleId) throw new Error("请先选择一个对战");
@@ -2785,6 +2863,21 @@ battleSelect.addEventListener("change", () => {
   uiState.showBattleMoveDrawer = false;
   uiState.showSetupInBattle = false;
   renderBattleBoard();
+});
+
+reviewSourceSelect?.addEventListener("change", () => {
+  reviewState.source = reviewSourceSelect.value === "battle" ? "battle" : "game";
+  reviewState.gameId = null;
+  reviewState.ply = Number.MAX_SAFE_INTEGER;
+  reviewState.focusPly = null;
+  uiState.reviewSideFilter = "both";
+  uiState.reviewTimelineActivePly = null;
+  uiState.reviewPanelMode = "overview";
+  uiState.reviewSetupCollapsed = false;
+  renderCache.reviewBoardKey = "";
+  renderReviewGameOptions();
+  renderReviewResult();
+  updateReviewControls();
 });
 
 reviewGameSelect?.addEventListener("change", () => {

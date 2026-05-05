@@ -1446,11 +1446,7 @@ export function getManualReviewTags(gameId) {
   return review ? [...review.tags].sort((a, b) => a.plyIndex - b.plyIndex) : [];
 }
 
-export function analyzeGame(gameId) {
-  const { db, userId } = requireCurrentUser();
-  const game = db.games.find((g) => g.id === gameId && g.userId === userId);
-  if (!game) throw new Error("对局不存在或无权限");
-  const manualTags = getManualReviewTags(gameId);
+function analyzeOwner(owner, { manualTags = [], ownerId = "", mode = "practice" } = {}) {
   const manualByPly = new Map();
   manualTags.forEach((t) => {
     if (!manualByPly.has(t.plyIndex)) manualByPly.set(t.plyIndex, []);
@@ -1466,12 +1462,12 @@ export function analyzeGame(gameId) {
     middlegame: { best: 0, inaccuracy: 0, mistake: 0 },
     endgame: { best: 0, inaccuracy: 0, mistake: 0 },
   };
-  for (let i = 0; i < game.moves.length; i += 1) {
-    const move = game.moves[i];
+  for (let i = 0; i < owner.moves.length; i += 1) {
+    const move = owner.moves[i];
     const ply = i + 1;
     const side = move.piece[0];
-    const before = game.snapshots[i];
-    const after = game.snapshots[i + 1];
+    const before = owner.snapshots[i];
+    const after = owner.snapshots[i + 1];
     const tags = [];
     const assessmentQuality = move.assessment?.quality || "";
     const assessmentRisks = Array.isArray(move.assessment?.risks) ? move.assessment.risks : [];
@@ -1484,7 +1480,7 @@ export function analyzeGame(gameId) {
     }
 
     if (i >= 2) {
-      const prevSameSide = game.moves[i - 2];
+      const prevSameSide = owner.moves[i - 2];
       if (
         prevSameSide &&
         prevSameSide.piece === move.piece &&
@@ -1501,8 +1497,8 @@ export function analyzeGame(gameId) {
       tags.push("应将");
     }
 
-    if (i + 1 < game.moves.length) {
-      const opp = game.moves[i + 1];
+    if (i + 1 < owner.moves.length) {
+      const opp = owner.moves[i + 1];
       if (
         opp.to[0] === move.to[0] &&
         opp.to[1] === move.to[1] &&
@@ -1590,11 +1586,11 @@ export function analyzeGame(gameId) {
   if (suggestions.length === 0) suggestions.push("先补充手动标签，系统会给出更精准建议。");
 
   return {
-    gameId,
-    gameName: game.name,
-    mode: game.mode || "practice",
-    status: game.status || "active",
-    totalPly: game.moves.length,
+    gameId: ownerId || owner.id || "",
+    gameName: owner.name,
+    mode,
+    status: owner.status || "active",
+    totalPly: owner.moves.length,
     items,
     quality,
     risks,
@@ -1605,6 +1601,27 @@ export function analyzeGame(gameId) {
     topIssues,
     suggestions,
   };
+}
+
+export function analyzeGame(gameId) {
+  const { db, userId } = requireCurrentUser();
+  const game = db.games.find((g) => g.id === gameId && g.userId === userId);
+  if (!game) throw new Error("对局不存在或无权限");
+  const manualTags = getManualReviewTags(gameId);
+  return analyzeOwner(game, {
+    manualTags,
+    ownerId: gameId,
+    mode: game.mode || "practice",
+  });
+}
+
+export function analyzeBattle(battleId) {
+  const battle = getBattle(battleId);
+  return analyzeOwner(battle, {
+    manualTags: [],
+    ownerId: battleId,
+    mode: "battle",
+  });
 }
 
 export function createGame(name, options = {}) {
@@ -2125,6 +2142,23 @@ export function endBattle(battleId, { keepRecord = true } = {}) {
   }
   saveDb(db);
   return { keepRecord };
+}
+
+export function resignBattle(battleId, { side = null } = {}) {
+  const { db, userId } = requireCurrentUser();
+  const battle = db.battles.find((b) => b.id === battleId);
+  if (!battle) throw new Error("对战不存在");
+  const mySide = userBattleSide(battle, userId);
+  if (!mySide) throw new Error("无权限操作该对战");
+  if (battle.status === "waiting") throw new Error("等待对手加入后才能认输");
+  if (battle.status === "finished") throw new Error("该对战已结束");
+  const resignSide = side || mySide;
+  if (resignSide !== "r" && resignSide !== "b") throw new Error("认输方非法");
+  battle.status = "finished";
+  battle.winnerSide = oppositeSide(resignSide);
+  battle.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return { resignedSide: resignSide, winnerSide: battle.winnerSide };
 }
 
 export function undoBattleMove(battleId) {

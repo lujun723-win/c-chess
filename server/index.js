@@ -316,11 +316,27 @@ function startMdnsAliasPublisher() {
   if (!aliasHost || aliasHost === ".local") return null;
   const lanIp = collectLanIPv4()[0];
   if (!lanIp) return null;
-  const child = spawn("avahi-publish", ["-a", "-R", aliasHost, lanIp], {
+  let cmd = "avahi-publish";
+  let args = ["-a", "-R", aliasHost, lanIp];
+  if (process.platform === "darwin") {
+    const aliasName = aliasHost.replace(/\.local$/, "");
+    if (!aliasName) return null;
+    cmd = "dns-sd";
+    args = ["-P", aliasName, "_http._tcp", "local", String(PORT), aliasHost, lanIp, "path=/mvp/"];
+  }
+  const child = spawn(cmd, args, {
     stdio: "ignore",
     detached: false,
   });
-  child.on("error", () => {});
+  child.on("error", (err) => {
+    // eslint-disable-next-line no-console
+    console.warn(`[mdns] publisher start failed: ${err instanceof Error ? err.message : "unknown error"}`);
+  });
+  child.on("exit", (code) => {
+    if (code === 0 || code === null) return;
+    // eslint-disable-next-line no-console
+    console.warn(`[mdns] publisher exited with code ${code}`);
+  });
   return child;
 }
 
