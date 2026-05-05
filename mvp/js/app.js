@@ -1342,23 +1342,89 @@ function describeImpactFromAssessment(assessment) {
   return tags.join("；");
 }
 
-function reviewCoachAdvice(item, assessment) {
-  if (assessment?.quality === "mistake") {
-    return "建议重摆该节点，先做“将军-吃子-威胁”三步检查，再与参考最优对照。";
+function reviewWhyText(item, assessment) {
+  if (!assessment) return "这步缺少完整评估，先重摆局面，检查是否有将军、吃子和被吃风险。";
+  const risks = Array.isArray(assessment.risks) ? assessment.risks : [];
+  if (assessment.brilliant) return "这步质量高，关键价值是主动制造威胁，同时没有明显落点风险。";
+  if (risks.includes("下一步可能被将")) return "主要问题是走完后王城不安全，对手下一步可能直接将军。";
+  if (
+    risks.includes("落点可能被吃") ||
+    risks.includes("三步内可能净亏交换") ||
+    assessment.threePly?.movedPieceCaptured
+  ) {
+    return "主要问题是落点不安全，预演显示这个子可能很快被反吃，交换后容易净亏。";
   }
-  if (assessment?.risks?.includes("下一步可能被将")) {
-    return "优先处理王城安全，先防将再争先。";
+  if (assessment.quality === "mistake") {
+    return `这步和参考最优差距较大，约 ${Number(assessment.scoreGap || 0).toFixed(2)}，通常会让局面明显转差。`;
   }
-  if (assessment?.risks?.length) {
-    return "建议先计算交换净值，再决定是否执行该计划。";
+  if (assessment.quality === "inaccuracy") {
+    return `这步能下，但效率不高，和参考最优差约 ${Number(assessment.scoreGap || 0).toFixed(2)}。`;
   }
-  if (assessment?.brilliant) {
-    return "这是高质量主动手，建议记录触发条件，迁移到相似局面。";
+  if (item?.autoTags?.includes("反复调子")) return "这步有重复调子的迹象，花了一手棋，但没有形成更明确的威胁。";
+  return "这步整体可行，问题不大；复盘重点是确认有没有更主动、更省步的选择。";
+}
+
+function reviewBetterMoveText(item, assessment) {
+  const best = assessment?.bestMoveNotation || "";
+  if (!best) return "当前没有稳定推荐，建议手动重摆这一手，先列出 2 个候选走法再比较。";
+  if (best === item?.notation || assessment?.quality === "best") {
+    return `参考最优也是「${best}」。这手可以保留，重点学习它为什么成立。`;
   }
-  if (item?.autoTags?.includes("反复调子")) {
-    return "该阶段有调子往返迹象，后续同类局面可优先选择带先手的转化。";
+  return `当时更值得优先看的走法是「${best}」。先比较它和实走「${item?.notation || "当前走法"}」后的安全性与先手。`;
+}
+
+function reviewChecklistText(item, assessment) {
+  const risks = Array.isArray(assessment?.risks) ? assessment.risks : [];
+  if (risks.includes("下一步可能被将")) return "下次先问：我走完以后，对方有没有将军？将军能不能顺手得子？";
+  if (
+    risks.includes("落点可能被吃") ||
+    risks.includes("三步内可能净亏交换") ||
+    assessment?.threePly?.movedPieceCaptured
+  ) {
+    return "下次先问：这个子落下去以后，对方能不能直接吃？我能不能反吃回来？交换后亏不亏？";
   }
-  return "可行但仍可优化，下一次优先比较先手效率更高的候选手。";
+  if (item?.autoTags?.includes("反复调子")) return "下次先问：这手有没有制造新威胁？如果只是来回走同一个子，就换一个更主动的候选。";
+  if (assessment?.quality === "mistake" || assessment?.quality === "inaccuracy") {
+    return "下次按顺序检查：先看将军，再看能吃的子，再看自己落点会不会被吃。";
+  }
+  return "下次继续保持这个顺序：先确认王安全，再看有没有吃子和先手，最后比较候选走法效率。";
+}
+
+function reviewNodeScore(item, assessment) {
+  const risks = Array.isArray(item?.risks) ? item.risks : [];
+  let score = Number(assessment?.scoreGap || item?.scoreGap || 0);
+  if (assessment?.quality === "mistake") score += 8;
+  if (assessment?.quality === "inaccuracy") score += 3;
+  if (risks.length) score += 4 + risks.length;
+  if (assessment?.threePly?.movedPieceCaptured) score += 3;
+  if (assessment?.brilliant) score += 1;
+  return score;
+}
+
+function buildTopReviewNodes(report, game, sideFilter, limit = 3) {
+  return report.items
+    .filter((item) => matchReviewSide(item.side, sideFilter))
+    .map((item) => ({
+      item,
+      assessment: game.moves[item.ply - 1]?.assessment || null,
+      score: reviewNodeScore(item, game.moves[item.ply - 1]?.assessment || null),
+    }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.item.ply - b.item.ply)
+    .slice(0, limit);
+}
+
+function buildReviewOneLineSummary(report, sideStats, topNodes, sideFilter) {
+  const target = reviewSideText(sideFilter);
+  if (!report.totalPly) return `${target}暂无可复盘走法。`;
+  const first = topNodes[0]?.item || null;
+  const mainIssue = sideStats.topIssues[0]?.tag || "";
+  if (mainIssue && first) {
+    return `${target}最需要关注「${mainIssue}」，建议先重摆第 ${first.ply} 手。`;
+  }
+  if (sideStats.quality.mistake > 0 && first) return `${target}有 ${sideStats.quality.mistake} 手明显失误，先看第 ${first.ply} 手。`;
+  if (sideStats.riskMoves > 0 && first) return `${target}主要是安全检查不够稳定，先看第 ${first.ply} 手的风险点。`;
+  return `${target}整体较稳，本局重点学习最优手和主动手的触发条件。`;
 }
 
 function shouldIncludeTimelineMark(item, assessment, filter) {
@@ -1493,6 +1559,20 @@ function buildReviewHtml(report, game) {
   const suggestionRows = sideStats.suggestions.length
     ? sideStats.suggestions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")
     : "<li>暂无</li>";
+  const topNodes = buildTopReviewNodes(report, game, sideFilter, 3);
+  const summaryText = buildReviewOneLineSummary(report, sideStats, topNodes, sideFilter);
+  const topNodeRows = topNodes.length
+    ? topNodes
+        .map(({ item, assessment }) => {
+          const quality = assessment?.brilliant ? `${item.qualityLabel}·妙手` : item.qualityLabel;
+          return `<li><button type="button" class="review-jump-btn compact-btn" data-review-ply="${item.ply}">第 ${item.ply} 手</button> ${
+            item.side === "r" ? "红" : "黑"
+          }${escapeHtml(item.notation)} · ${escapeHtml(quality || "未评估")} · ${escapeHtml(
+            reviewWhyText(item, assessment),
+          )}</li>`;
+        })
+        .join("")
+    : "<li>暂无特别需要重摆的节点。</li>";
   const timeline = buildTimelineModel(report, game, filter, sideFilter);
   const activePly = timeline.marks.find((m) => m.ply === uiState.reviewTimelineActivePly)?.ply || null;
   const activeItem = activePly === null ? null : report.items[activePly - 1] || null;
@@ -1510,17 +1590,14 @@ function buildReviewHtml(report, game) {
           if (!pt || !matchReviewSide(pt.side, sideFilter)) continue;
           around.push(`${p}. ${pt.side === "r" ? "红" : "黑"}${pt.notation}`);
         }
-        const lineText = assessment?.threePly?.line?.length
-          ? assessment.threePly.line.join(" -> ")
-          : "暂无稳定预演线";
         const activeClass = reviewState.focusPly === km.ply ? " is-focus" : "";
         return `<article class="review-key-node${activeClass}">
           <h5>第 ${km.ply} 手 · ${km.side === "r" ? "红方" : "黑方"} ${escapeHtml(km.notation)}</h5>
           <button type="button" class="review-jump-btn compact-btn" data-review-ply="${km.ply}">跳到该手局面</button>
-          <p><strong>局势影响：</strong>${escapeHtml(describeImpactFromAssessment(assessment))}</p>
+          <p><strong>这步为什么不好：</strong>${escapeHtml(reviewWhyText(item, assessment))}</p>
+          <p><strong>当时更好的选择：</strong>${escapeHtml(reviewBetterMoveText(item, assessment))}</p>
+          <p><strong>下次先检查什么：</strong>${escapeHtml(reviewChecklistText(item, assessment))}</p>
           <p><strong>关键窗口：</strong>${escapeHtml(around.join(" ｜ ") || "暂无")}</p>
-          <p><strong>推演：</strong>${escapeHtml(lineText)}</p>
-          <p><strong>复盘指导：</strong>${escapeHtml(reviewCoachAdvice(item, assessment))}</p>
         </article>`;
       })()
     : `<p class="review-empty">当前筛选下没有可展示的关键点。点击时间线标记可切换查看。</p>`;
@@ -1534,6 +1611,7 @@ function buildReviewHtml(report, game) {
         )} · ${gameStatusText(
           report.status,
         )} · 共 ${report.totalPly} 手</p>
+        <p><strong>本局一句话：</strong>${escapeHtml(summaryText)}</p>
         <div class="review-kpi-grid">
           <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${sideStats.quality.best}</strong></button>
           <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${sideStats.quality.inaccuracy}</strong></button>
@@ -1544,6 +1622,7 @@ function buildReviewHtml(report, game) {
         <p>开局：最优 ${sideStats.phases.opening.best} / 有更优 ${sideStats.phases.opening.inaccuracy} / 失误 ${sideStats.phases.opening.mistake}</p>
         <p>中局：最优 ${sideStats.phases.middlegame.best} / 有更优 ${sideStats.phases.middlegame.inaccuracy} / 失误 ${sideStats.phases.middlegame.mistake}</p>
         <p>收官：最优 ${sideStats.phases.endgame.best} / 有更优 ${sideStats.phases.endgame.inaccuracy} / 失误 ${sideStats.phases.endgame.mistake}</p>
+        <section><h5>最值得重摆的 3 手</h5><ul>${topNodeRows}</ul></section>
         <div class="review-two-col">
           <section><h5>高频问题</h5><ul>${issueRows}</ul></section>
           <section><h5>训练建议</h5><ul>${suggestionRows}</ul></section>
