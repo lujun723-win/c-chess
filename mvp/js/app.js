@@ -1390,7 +1390,18 @@ function reviewChecklistText(item, assessment) {
   return "下次继续保持这个顺序：先确认王安全，再看有没有吃子和先手，最后比较候选走法效率。";
 }
 
+function hasSubstantiveReviewValue(item, assessment) {
+  if (!assessment) return false;
+  const risks = Array.isArray(item?.risks) ? item.risks : [];
+  if (assessment.quality === "mistake" || assessment.quality === "inaccuracy") return true;
+  if (assessment.brilliant) return true;
+  if (risks.length > 0) return true;
+  if (assessment.threePly?.movedPieceCaptured) return true;
+  return false;
+}
+
 function reviewNodeScore(item, assessment) {
+  if (!hasSubstantiveReviewValue(item, assessment)) return 0;
   const risks = Array.isArray(item?.risks) ? item.risks : [];
   let score = Number(assessment?.scoreGap || item?.scoreGap || 0);
   if (assessment?.quality === "mistake") score += 8;
@@ -1429,7 +1440,8 @@ function buildReviewOneLineSummary(report, sideStats, topNodes, sideFilter) {
 
 function shouldIncludeTimelineMark(item, assessment, filter) {
   const risks = Array.isArray(item?.risks) ? item.risks : [];
-  if (filter === "best") return assessment?.quality === "best";
+  if (!hasSubstantiveReviewValue(item, assessment)) return false;
+  if (filter === "best") return assessment?.quality === "best" && Boolean(assessment?.brilliant);
   if (filter === "inaccuracy") return assessment?.quality === "inaccuracy";
   if (filter === "mistake") return assessment?.quality === "mistake";
   if (filter === "risk") return risks.length > 0;
@@ -1613,7 +1625,7 @@ function buildReviewHtml(report, game) {
         )} · 共 ${report.totalPly} 手</p>
         <p><strong>本局一句话：</strong>${escapeHtml(summaryText)}</p>
         <div class="review-kpi-grid">
-          <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>最优</span><strong>${sideStats.quality.best}</strong></button>
+          <button type="button" class="review-filter-chip${filter === "best" ? " is-active" : ""}" data-review-filter="best"><span>妙手</span><strong>${sideStats.quality.best}</strong></button>
           <button type="button" class="review-filter-chip${filter === "inaccuracy" ? " is-active" : ""}" data-review-filter="inaccuracy"><span>有更优</span><strong>${sideStats.quality.inaccuracy}</strong></button>
           <button type="button" class="review-filter-chip${filter === "mistake" ? " is-active" : ""}" data-review-filter="mistake"><span>失误</span><strong>${sideStats.quality.mistake}</strong></button>
           <button type="button" class="review-filter-chip${filter === "risk" ? " is-active" : ""}" data-review-filter="risk"><span>风险点</span><strong>${sideStats.riskMoves}</strong></button>
